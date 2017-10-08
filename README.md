@@ -8,7 +8,7 @@ nakedret is a Go static analysis tool to find naked returns in functions greater
 
 # Usage
 
-Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path.
+Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path. These cannot be mixed - either specify all filenames, all directories, or all package names.
 
 `nakedret [flags] packages/files`
 
