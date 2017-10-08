@@ -10,7 +10,7 @@ nakedret is a Go static analysis tool to find naked returns in functions greater
 
 Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path.
 
-nakedret [flags] packages/files
+`nakedret [flags] packages/files`
 
 Currently, the only flag supported is -l, which is an optional flag to specify the maximum length a function can be (in terms of line length). If not specified, it defaults to 5.
 
