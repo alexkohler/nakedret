@@ -16,7 +16,7 @@ Currently, the only flag supported is -l, which is an optional numeric flag to s
 
 ## Purpose
 
-As noted in Go's (Code Review comments)[https://github.com/golang/go/wiki/CodeReviewComments#named-result-parameters]:
+As noted in Go's [Code Review comments](https://github.com/golang/go/wiki/CodeReviewComments#named-result-parameters):
 
 > Naked returns are okay if the function is a handful of lines. Once it's a medium sized function, be explicit with your return 
 > values. Corollary: it's not worth it to name result parameters just because it enables you to use naked returns. Clarity of docs is always more important than saving a line or two in your function.
