@@ -8,9 +8,7 @@ nakedret is a Go static analysis tool to find naked returns in functions greater
 
 ## Usage
 
-Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path. These cannot be mixed - either specify all filenames, all directories, or all package names.
-
-`nakedret [flags] packages/files`
+Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path. Nakedret also supports the `...` wildcard.
 
 Currently, the only flag supported is -l, which is an optional flag to specify the maximum length a function can be (in terms of line length). If not specified, it defaults to 5.
 
@@ -80,6 +78,22 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 	return
 }
 ```
+
+
+Below are some examples on how nakedret can be invoked:
+
+By file:
+`nakedret [flags] file1.go file2.go file3.go`
+
+By directory:
+`nakedret [flags] src/directory1 src/directory2 src/directory3/foo`
+
+`nakedret [flags] src/directory1/... src/directory2/... src/directory3/...`
+
+By package:
+`nakedret [flags] package1/foo package2 package3/bar`
+
+`nakedret [flags] package1/... package2/...`
 
 ## TODO
 
