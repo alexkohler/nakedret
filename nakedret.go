@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"log"
@@ -14,8 +15,13 @@ import (
 )
 
 const (
-	path = "./"
+	pwd = "./"
 )
+
+func init() {
+	//TODO allow build tags
+	build.Default.UseAllFiles = true
+}
 
 func usage() {
 	log.Printf("Usage of %s:\n", os.Args[0])
@@ -75,30 +81,19 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 	files := make([]*ast.File, 0)
 
 	if len(args) == 0 {
-		directoryList = append(directoryList, path)
+		directoryList = append(directoryList, pwd)
 	} else {
 		for _, arg := range args {
-			if strings.HasSuffix(arg, "/...") {
+			if strings.HasSuffix(arg, "/...") && isDir(arg[:len(arg)-len("/...")]) {
 
-				trimmedArg := strings.TrimSuffix(arg, "/...")
-				if isDir(trimmedArg) {
-					err := filepath.Walk(trimmedArg, func(path string, f os.FileInfo, err error) error {
-						if f.IsDir() {
-							directoryList = append(directoryList, path)
-						}
-						return nil
-					})
-					if err != nil {
-						return nil, err
-					}
-				} else {
-					return nil, fmt.Errorf("%v is not a valid directory", arg)
+				for _, dirname := range allPackagesInFS(arg) {
+					directoryList = append(directoryList, dirname)
 				}
 
 			} else if isDir(arg) {
 				directoryList = append(directoryList, arg)
 
-			} else {
+			} else if exists(arg) {
 				if strings.HasSuffix(arg, ".go") {
 					fileMode = true
 					f, err := parser.ParseFile(fset, arg, nil, 0)
@@ -109,7 +104,35 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 				} else {
 					return nil, fmt.Errorf("invalid file %v specified", arg)
 				}
+			} else {
 
+				//TODO clean this up a bit
+				imPaths := importPaths([]string{arg})
+				for _, importPath := range imPaths {
+					pkg, err := build.Import(importPath, ".", 0)
+					if err != nil {
+						return nil, err
+					}
+					var stringFiles []string
+					stringFiles = append(stringFiles, pkg.GoFiles...)
+					// files = append(files, pkg.CgoFiles...)
+					stringFiles = append(stringFiles, pkg.TestGoFiles...)
+					if pkg.Dir != "." {
+						for i, f := range stringFiles {
+							stringFiles[i] = filepath.Join(pkg.Dir, f)
+						}
+					}
+
+					fileMode = true
+					for _, stringFile := range stringFiles {
+						f, err := parser.ParseFile(fset, stringFile, nil, 0)
+						if err != nil {
+							return nil, err
+						}
+						files = append(files, f)
+					}
+
+				}
 			}
 		}
 	}
@@ -137,6 +160,11 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 func isDir(filename string) bool {
 	fi, err := os.Stat(filename)
 	return err == nil && fi.IsDir()
+}
+
+func exists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
 }
 
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
