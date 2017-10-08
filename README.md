@@ -2,11 +2,11 @@
 
 nakedret is a Go static analysis tool to find naked returns in functions greater than a specified function length.
 
-# Installation
+## Installation
 
     go get -u github.com/alexkohler/nakedret
 
-# Usage
+## Usage
 
 Similar to other Go static anaylsis tools, nakedret can be invoked with one or more filenames, directories, or packages named by its import path. These cannot be mixed - either specify all filenames, all directories, or all package names.
 
@@ -14,7 +14,8 @@ Similar to other Go static anaylsis tools, nakedret can be invoked with one or m
 
 Currently, the only flag supported is -l, which is an optional flag to specify the maximum length a function can be (in terms of line length). If not specified, it defaults to 5.
 
-# Purpose
+## Purpose
+
 As noted in Go's (Code Review comments)[https://github.com/golang/go/wiki/CodeReviewComments#named-result-parameters]:
 
 > Naked returns are okay if the function is a handful of lines. Once it's a medium sized function, be explicit with your return 
@@ -22,7 +23,7 @@ As noted in Go's (Code Review comments)[https://github.com/golang/go/wiki/CodeRe
 
 This tool aims to catch naked returns on non-trivial functions.
 
-# Example
+## Example
 
 Let's take the `types` package in the Go source as an example:
 
@@ -78,14 +79,12 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 
 	return
 }
+```
 
-
-# TODO
+## TODO
 Unit tests - (may require some refactoring to do correctly)
 More flags 
 - supporting toggling of `build.Context.UseAllFiles` may be useful for some. 
 - Configuration on whether or not to run on test files
-```
-
   
 
