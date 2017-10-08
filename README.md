@@ -23,7 +23,7 @@ This tool aims to catch naked returns on non-trivial functions.
 
 # Example
 
-Let's take the `types` in the Go source as an example:
+Let's take the `types` package in the Go source as an example:
 
 ```Bash
 $ nakedret -l 25 types/
