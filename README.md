@@ -86,13 +86,13 @@ Below are some examples on how nakedret can be invoked:
 
 `nakedret [flags] file1.go file2.go file3.go`
 
-### By directory:
+#### By directory:
 
 `nakedret [flags] src/directory1 src/directory2 src/directory3/foo`
 
 `nakedret [flags] src/directory1/... src/directory2/... src/directory3/...`
 
-### By package:
+#### By package:
 
 `nakedret [flags] package1/foo package2 package3/bar`
 
