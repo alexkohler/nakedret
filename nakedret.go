@@ -74,39 +74,43 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 	var fileMode bool
 	files := make([]*ast.File, 0)
 
-	for _, arg := range args {
-		if strings.HasSuffix(arg, "/...") {
+	if len(args) == 0 {
+		directoryList = append(directoryList, path)
+	} else {
+		for _, arg := range args {
+			if strings.HasSuffix(arg, "/...") {
 
-			trimmedArg := strings.TrimSuffix(arg, "/...")
-			if isDir(trimmedArg) {
-				err := filepath.Walk(trimmedArg, func(path string, f os.FileInfo, err error) error {
-					if f.IsDir() {
-						directoryList = append(directoryList, path)
+				trimmedArg := strings.TrimSuffix(arg, "/...")
+				if isDir(trimmedArg) {
+					err := filepath.Walk(trimmedArg, func(path string, f os.FileInfo, err error) error {
+						if f.IsDir() {
+							directoryList = append(directoryList, path)
+						}
+						return nil
+					})
+					if err != nil {
+						return nil, err
 					}
-					return nil
-				})
-				if err != nil {
-					return nil, err
+				} else {
+					return nil, fmt.Errorf("%v is not a valid directory", arg)
 				}
+
+			} else if isDir(arg) {
+				directoryList = append(directoryList, arg)
+
 			} else {
-				return nil, fmt.Errorf("%v is not a valid directory", arg)
-			}
-
-		} else if isDir(arg) {
-			directoryList = append(directoryList, arg)
-
-		} else {
-			if strings.HasSuffix(arg, ".go") {
-				fileMode = true
-				f, err := parser.ParseFile(fset, arg, nil, 0)
-				if err != nil {
-					return nil, err
+				if strings.HasSuffix(arg, ".go") {
+					fileMode = true
+					f, err := parser.ParseFile(fset, arg, nil, 0)
+					if err != nil {
+						return nil, err
+					}
+					files = append(files, f)
+				} else {
+					return nil, fmt.Errorf("invalid file %v specified", arg)
 				}
-				files = append(files, f)
-			} else {
-				return nil, fmt.Errorf("invalid file %v specified", arg)
-			}
 
+			}
 		}
 	}
 
