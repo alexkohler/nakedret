@@ -35,7 +35,7 @@ types/stmt.go:275 caseTypes naked returns on 27 line function
 types/lookup.go:275 MissingMethod naked returns on 39 line function
 ```
 
-Below is one of the not so intuitive uses of naked returns in types/lookup.go found by nakedret (nakedret will return the line number of the last naked return in the function):
+Below is one of the not so intuitive uses of naked returns in `types/lookup.go` found by nakedret (nakedret will return the line number of the last naked return in the function):
 
 
 ```Go
@@ -82,7 +82,7 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 ```
 
 ## TODO
-Unit tests - (may require some refactoring to do correctly)
+Unit tests (may require some refactoring to do correctly)
 More flags 
 - supporting toggling of `build.Context.UseAllFiles` may be useful for some. 
 - Configuration on whether or not to run on test files
