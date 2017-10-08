@@ -25,11 +25,13 @@ This tool aims to catch naked returns on non-trivial functions.
 
 Let's take the `types` in the Go source as an example:
 
+```Bash
 $ nakedret -l 25 types/
 types/check.go:245 checkFiles naked returns on 26 line function 
 types/typexpr.go:443 collectParams naked returns on 53 line function 
 types/stmt.go:275 caseTypes naked returns on 27 line function 
 types/lookup.go:275 MissingMethod naked returns on 39 line function
+```
 
 Below is one of the not so intuitive uses of naked returns found by nakedret:
 
