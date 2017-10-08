@@ -19,7 +19,6 @@ const (
 )
 
 func init() {
-	//TODO allow build tags
 	build.Default.UseAllFiles = true
 }
 
