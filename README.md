@@ -88,3 +88,4 @@ More flags
 - supporting toggling of `build.Context.UseAllFiles` may be useful for some. 
 - Configuration on whether or not to run on test files
 Vim quickfix format?
+Globbing support (e.g. nakedret *.go)
