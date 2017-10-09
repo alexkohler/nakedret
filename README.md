@@ -88,3 +88,9 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 - Configuration on whether or not to run on test files
 - Vim quickfix format?
 - Globbing support (e.g. nakedret *.go)
+
+
+## Contributing
+
+Pull requests welcome!
+

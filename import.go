@@ -205,9 +205,9 @@ func matchPackages(pattern string) []string {
 				return nil
 			}
 
-			// Avoid .foo, _foo, and testdata directory trees.
+			// Avoid .foo, _foo, testdata and vendor directory trees.
 			_, elem := filepath.Split(path)
-			if strings.HasPrefix(elem, ".") || strings.HasPrefix(elem, "_") || elem == "testdata" {
+			if strings.HasPrefix(elem, ".") || strings.HasPrefix(elem, "_") || elem == "testdata" || elem == "vendor" {
 				return filepath.SkipDir
 			}
 
@@ -286,10 +286,10 @@ func matchPackagesInFS(pattern string) []string {
 			path = filepath.Clean(path)
 		}
 
-		// Avoid .foo, _foo, and testdata directory trees, but do not avoid "." or "..".
+		// Avoid .foo, _foo, testdata and vendor directory trees, but do not avoid "." or "..".
 		_, elem := filepath.Split(path)
 		dot := strings.HasPrefix(elem, ".") && elem != "." && elem != ".."
-		if dot || strings.HasPrefix(elem, "_") || elem == "testdata" {
+		if dot || strings.HasPrefix(elem, "_") || elem == "testdata" || elem == "vendor" {
 			return filepath.SkipDir
 		}
 
