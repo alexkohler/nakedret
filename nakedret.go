@@ -30,6 +30,7 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// This should also be given logger?
 type returnsVisitor struct {
 	f         *token.FileSet
 	maxLength uint
