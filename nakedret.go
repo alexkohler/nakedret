@@ -9,8 +9,10 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -156,6 +158,28 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 	return files, nil
 }
 
+type zoop uint32
+
+type theStruct struct {
+	theField uint32
+}
+
+func red() theStruct {
+
+	_ = net.IPConn{}
+
+	myStruct := theStruct{
+		theField: uint32(5),
+	}
+	//
+	//
+	//
+	//
+	//
+	//
+	return myStruct //
+}
+
 func isDir(filename string) bool {
 	fi, err := os.Stat(filename)
 	return err == nil && fi.IsDir()
@@ -166,6 +190,7 @@ func exists(filename string) bool {
 	return err == nil
 }
 
+// ?https://stackoverflow.com/questions/24118011/how-can-i-get-all-struct-under-a-package-in-golang
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	var namedReturns []*ast.Ident
 
@@ -173,6 +198,76 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	if !ok {
 		return v
 	}
+
+	// can we generate a temp file with an init registry?
+	// https://play.golang.org/p/rgxTlJhMrq
+	fmt.Println(funcDecl.Name.Name)
+	for _, stmt := range funcDecl.Body.List {
+		fmt.Printf("     %T\n", stmt)
+		//TODO how do we know it's a struct?
+		asgnStmt, ok := stmt.(*ast.AssignStmt)
+		if ok {
+			for _, expr := range asgnStmt.Rhs {
+				fmt.Printf("	%T\n", expr)
+				cmpLit, ok := expr.(*ast.CompositeLit)
+				if ok {
+					fmt.Printf("TYPE %T\n", cmpLit.Type)
+					iiiiii, ok := cmpLit.Type.(*ast.Ident)
+					if ok {
+						fmt.Printf("@@@@@@@@@@@@@@@@@@@@@@22tiddddle %v\n", iiiiii.Name) // this is where we have struct name which I think we can reflect belowx
+						v := reflect.ValueOf(node).Elem()
+						for i, n := 0, v.NumField(); i < n; i++ {
+							 fmt.Printf("%T\n", v.Field(i).Addr().Interface())
+							//switch s := v.Field(i).Addr().Interface().(type) {
+							//case **ast.FieldList:
+							//	fmt.Println("shhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeet")
+								// dref1 := *s
+								// dref2 := *dref1
+								// for _, zoop := range dref2.List {
+								// fmt.Println(zoop)
+								// }
+							}
+						}
+					}
+
+					// Range through composite elements
+					for _, cmpEle := range cmpLit.Elts {
+						kv, ok := cmpEle.(*ast.KeyValueExpr)
+						if ok {
+							// key is ident
+							keyIdent, ok := kv.Key.(*ast.Ident)
+							if ok {
+								fmt.Printf("ball hog %v\n", keyIdent.Name)
+								// another ident with a name here... we need some definition of the struct.
+							}
+
+							// val is callexpr
+							// fmt.Printf("val %T\n", kv.Value)
+							possibleCast, ok := kv.Value.(*ast.CallExpr)
+							if ok {
+								// we have an ident here
+								_, ok := possibleCast.Fun.(*ast.Ident)
+								if ok {
+									//TODO nil check on obj
+									// fmt.Printf(" sssss	%v\n", wtfIdent.Name)
+									// primitive cast - uint32
+									// SO what we need to figure out is how to map the primitive name to the field type of the struct
+									// to see if we have a redundant cast
+
+									// no cast - we won't get here
+
+									// ast.BasicLit means there was no cast
+
+									// looks like typedefs will be ast.Object. this will probably be harder. expand on this
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	var functionLineLength int
 	// We've found a function
 	if funcDecl.Type != nil && funcDecl.Type.Results != nil {
