@@ -1,5 +1,9 @@
 package main
 
+//TO CLEAN UP - make a file that just prints the structs used in the specified files
+// Take each of those structs in some sort of DTO (name of struct, name of field, type of cast if it has one)
+// Then write new file to be gofmt'd
+
 import (
 	"errors"
 	"flag"
@@ -12,7 +16,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
@@ -161,7 +164,16 @@ func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
 type zoop uint32
 
 type theStruct struct {
-	theField uint32
+	theField  uint32
+	nada1     uint32
+	theField2 string
+	nada2     string
+	zz        zoop
+}
+
+//TODO need to catch these types of struct declarations as well
+var ZOOPER = theStruct{
+	theField: uint32(6),
 }
 
 func red() theStruct {
@@ -169,7 +181,11 @@ func red() theStruct {
 	_ = net.IPConn{}
 
 	myStruct := theStruct{
-		theField: uint32(5),
+		theField:  uint32(5),
+		nada1:     5,
+		theField2: string("hi"),
+		nada2:     "kjdp",
+		zz:        zoop(5),
 	}
 	//
 	//
@@ -192,6 +208,16 @@ func exists(filename string) bool {
 
 // ?https://stackoverflow.com/questions/24118011/how-can-i-get-all-struct-under-a-package-in-golang
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+
+	// I think we still need a registry....
+	/*if reflect.TypeOf(node) != nil && reflect.TypeOf(node).Kind() == reflect.Ptr {
+		vv := reflect.ValueOf(node).Elem()
+		for i, n := 0, vv.NumField(); i < n; i++ {
+			fmt.Printf("grrgrgrgrgrggrg %v\n", vv.Field(i).Type().Name())
+		}
+	}
+	return v*/
+
 	var namedReturns []*ast.Ident
 
 	funcDecl, ok := node.(*ast.FuncDecl)
@@ -199,66 +225,105 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		return v
 	}
 
-	// can we generate a temp file with an init registry?
+	// TYPE 1 - searching for structs inside of functions
 	// https://play.golang.org/p/rgxTlJhMrq
-	fmt.Println(funcDecl.Name.Name)
 	for _, stmt := range funcDecl.Body.List {
-		fmt.Printf("     %T\n", stmt)
+		// fmt.Printf("     %T\n", stmt)
 		//TODO how do we know it's a struct?
 		asgnStmt, ok := stmt.(*ast.AssignStmt)
 		if ok {
 			for _, expr := range asgnStmt.Rhs {
-				fmt.Printf("	%T\n", expr)
+				// fmt.Printf("	%T\n", expr)
 				cmpLit, ok := expr.(*ast.CompositeLit)
 				if ok {
-					fmt.Printf("TYPE %T\n", cmpLit.Type)
-					iiiiii, ok := cmpLit.Type.(*ast.Ident)
+					// fmt.Printf("TYPE %T\n", cmpLit.Type)
+					structName, ok := cmpLit.Type.(*ast.Ident)
 					if ok {
-						fmt.Printf("@@@@@@@@@@@@@@@@@@@@@@22tiddddle %v\n", iiiiii.Name) // this is where we have struct name which I think we can reflect belowx
-						v := reflect.ValueOf(node).Elem()
-						for i, n := 0, v.NumField(); i < n; i++ {
-							 fmt.Printf("%T\n", v.Field(i).Addr().Interface())
-							//switch s := v.Field(i).Addr().Interface().(type) {
-							//case **ast.FieldList:
-							//	fmt.Println("shhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeet")
+						// fmt.Printf("@@@@@@@@@@@@@@@@@@@@@@22tiddddle %v\n", structName.Name) // this is where we have struct name which I think we can reflect belowx
+						// go run myRegistry here with same package? and then run goimports? holy balls lol
+
+						// vv := reflect.ValueOf(node).Elem()
+						// fmt.Printf("%T\n", vv)
+
+						/*for i, n := 0, vv.NumField(); i < n; i++ {
+							// fmt.Printf("grrgrgrgrgrggrg %v\n", vv.Field(i).Type().Name())
+							switch s := vv.Field(i).Interface().(type) {
+							case *ast.FieldList:
+								if s != nil && s.List != nil {
+									for _, l := range s.List {
+										for _, n := range l.Names {
+											fmt.Println("		" + n.Name)
+										}
+									}
+								}
+							case *ast.Ident:
+							fmt.Printf("yea 		" + s.Obj.Kind.String())
+							if s != nil && s.Obj != nil && s.Obj.Decl != nil {
+								fd, ok := s.Obj.Decl.(*ast.FuncDecl)
+								if ok {
+									if fd.Body != nil && fd.Body.List != nil {
+										for _, l := range fd.Body.List {
+											fmt.Printf("gooooo %T\n", l)
+											assSt, ok := l.(*ast.AssignStmt)
+											if ok {
+												for _, expr := range assSt.Rhs {
+													cmpLit, ok := expr.(*ast.CompositeLit)
+													if ok {
+														// check composite elements
+														if cmpLit.Elts != nil {
+															for _, cmpEle := range cmpLit.Elts {
+																fmt.Printf("waaaaaaat %T\n", cmpEle)
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+
+							default:
+								//fmt.Printf("shhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeet %T\n", s)
+								s = nil
 								// dref1 := *s
 								// dref2 := *dref1
 								// for _, zoop := range dref2.List {
 								// fmt.Println(zoop)
-								// }
-							}
-						}
-					}
+						}*/
 
-					// Range through composite elements
-					for _, cmpEle := range cmpLit.Elts {
-						kv, ok := cmpEle.(*ast.KeyValueExpr)
-						if ok {
-							// key is ident
-							keyIdent, ok := kv.Key.(*ast.Ident)
+						// Range through composite elements
+						for _, cmpEle := range cmpLit.Elts {
+							kv, ok := cmpEle.(*ast.KeyValueExpr)
 							if ok {
-								fmt.Printf("ball hog %v\n", keyIdent.Name)
-								// another ident with a name here... we need some definition of the struct.
-							}
-
-							// val is callexpr
-							// fmt.Printf("val %T\n", kv.Value)
-							possibleCast, ok := kv.Value.(*ast.CallExpr)
-							if ok {
-								// we have an ident here
-								_, ok := possibleCast.Fun.(*ast.Ident)
+								// key is ident
+								keyIdent, ok := kv.Key.(*ast.Ident)
 								if ok {
-									//TODO nil check on obj
-									// fmt.Printf(" sssss	%v\n", wtfIdent.Name)
-									// primitive cast - uint32
-									// SO what we need to figure out is how to map the primitive name to the field type of the struct
-									// to see if we have a redundant cast
+									// fmt.Printf("ball hog %v\n", keyIdent.Name)
+									// another ident with a name here... we need some definition of the struct.
+									//****************** WE NEED TO FIGURE OUT HOW THEFIELD IS A UINT32
+									// I don't think there's a reliable way to do this without a registry.
 
-									// no cast - we won't get here
+									// val is callexpr
+									// fmt.Printf("val %T\n", kv.Value)
+									possibleCast, ok := kv.Value.(*ast.CallExpr)
+									if ok {
+										// we have an ident here
+										valueIdent, ok := possibleCast.Fun.(*ast.Ident)
+										if ok {
+											//TODO nil check on obj
+											fmt.Printf(" WINFO	%v %v %v\n", structName.Name, keyIdent.Name, valueIdent.Name) // hello i am a uint32 part of kv struct
+											// primitive cast - uint32
+											// SO what we need to figure out is how to map the primitive name to the field type of the struct
+											// to see if we have a redundant cast
 
-									// ast.BasicLit means there was no cast
+											// no cast - we won't get here
 
-									// looks like typedefs will be ast.Object. this will probably be harder. expand on this
+											// ast.BasicLit means there was no cast
+
+											// looks like typedefs will be ast.Object. this will probably be harder. expand on this
+										}
+									}
 								}
 							}
 						}
