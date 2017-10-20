@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -36,8 +37,9 @@ func usage() {
 }
 
 type returnsVisitor struct {
-	f         *token.FileSet
-	maxLength uint
+	f              *token.FileSet
+	maxLength      uint
+	currentPackage string
 }
 
 func main() {
@@ -73,6 +75,8 @@ func checkNakedReturns(args []string, maxLength *uint) error {
 	}
 
 	for _, f := range files {
+		// nil check?
+		retVis.currentPackage = f.Name.Name
 		ast.Walk(retVis, f)
 	}
 
@@ -240,6 +244,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 					structName, ok := cmpLit.Type.(*ast.Ident)
 					if ok {
 						// fmt.Printf("@@@@@@@@@@@@@@@@@@@@@@22tiddddle %v\n", structName.Name) // this is where we have struct name which I think we can reflect belowx
+
 						// go run myRegistry here with same package? and then run goimports? holy balls lol
 
 						// vv := reflect.ValueOf(node).Elem()
@@ -311,8 +316,46 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 										// we have an ident here
 										valueIdent, ok := possibleCast.Fun.(*ast.Ident)
 										if ok {
+
 											//TODO nil check on obj
 											fmt.Printf(" WINFO	%v %v %v\n", structName.Name, keyIdent.Name, valueIdent.Name) // hello i am a uint32 part of kv struct
+
+											//TODO later optimize with go generate
+											src := []byte(`
+												package hw
+												
+												import ( 
+												"fmt"
+												"reflect"
+												)
+
+												var typeRegistry = make(map[string]reflect.Type)
+												
+												func init() {
+													typeRegistry["theStruct"] = reflect.TypeOf(theStruct{})
+												}
+												
+												func Zoop() {
+													fmt.Println("hello world")
+												}
+												`)
+											f, err := os.Create("src/" + v.currentPackage + "/test.go")
+											if err != nil {
+												panic(err)
+											}
+											defer f.Close()
+											if _, err := f.Write(src); err != nil {
+												panic(err)
+											}
+
+											// build out this string with current package
+											out, err := exec.Command("sh", "-c", "gorram "+v.currentPackage+" Zoop").Output()
+											if err != nil {
+												panic(err)
+											}
+
+											fmt.Println(string(out))
+
 											// primitive cast - uint32
 											// SO what we need to figure out is how to map the primitive name to the field type of the struct
 											// to see if we have a redundant cast
