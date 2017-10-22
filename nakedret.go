@@ -1,8 +1,7 @@
 package main
 
-//TO CLEAN UP - make a file that just prints the structs used in the specified files
-// Take each of those structs in some sort of DTO (name of struct, name of field, type of cast if it has one)
-// Then write new file to be gofmt'd
+// Problems - dealing with embedded structs
+// actually finding the underlying type
 
 import (
 	"errors"
@@ -79,6 +78,8 @@ func checkNakedReturns(args []string, maxLength *uint) error {
 		retVis.currentPackage = f.Name.Name
 		ast.Walk(retVis, f)
 	}
+
+	retVis.Process()
 
 	return nil
 }
@@ -210,6 +211,14 @@ func exists(filename string) bool {
 	return err == nil
 }
 
+// maps package name to map of struct name to fields
+var pkgRegistry = make(map[string]map[string][]fieldInfo)
+
+type fieldInfo struct {
+	name  string
+	fType string
+}
+
 // ?https://stackoverflow.com/questions/24118011/how-can-i-get-all-struct-under-a-package-in-golang
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 
@@ -226,6 +235,11 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 
 	funcDecl, ok := node.(*ast.FuncDecl)
 	if !ok {
+		if node != nil {
+			file := v.f.File(node.Pos())
+			functionLineLength := file.Position(node.End()).Line - file.Position(node.Pos()).Line
+			fmt.Printf("%T %v\n", node, functionLineLength)
+		}
 		return v
 	}
 
@@ -243,60 +257,6 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 					// fmt.Printf("TYPE %T\n", cmpLit.Type)
 					structName, ok := cmpLit.Type.(*ast.Ident)
 					if ok {
-						// fmt.Printf("@@@@@@@@@@@@@@@@@@@@@@22tiddddle %v\n", structName.Name) // this is where we have struct name which I think we can reflect belowx
-
-						// go run myRegistry here with same package? and then run goimports? holy balls lol
-
-						// vv := reflect.ValueOf(node).Elem()
-						// fmt.Printf("%T\n", vv)
-
-						/*for i, n := 0, vv.NumField(); i < n; i++ {
-							// fmt.Printf("grrgrgrgrgrggrg %v\n", vv.Field(i).Type().Name())
-							switch s := vv.Field(i).Interface().(type) {
-							case *ast.FieldList:
-								if s != nil && s.List != nil {
-									for _, l := range s.List {
-										for _, n := range l.Names {
-											fmt.Println("		" + n.Name)
-										}
-									}
-								}
-							case *ast.Ident:
-							fmt.Printf("yea 		" + s.Obj.Kind.String())
-							if s != nil && s.Obj != nil && s.Obj.Decl != nil {
-								fd, ok := s.Obj.Decl.(*ast.FuncDecl)
-								if ok {
-									if fd.Body != nil && fd.Body.List != nil {
-										for _, l := range fd.Body.List {
-											fmt.Printf("gooooo %T\n", l)
-											assSt, ok := l.(*ast.AssignStmt)
-											if ok {
-												for _, expr := range assSt.Rhs {
-													cmpLit, ok := expr.(*ast.CompositeLit)
-													if ok {
-														// check composite elements
-														if cmpLit.Elts != nil {
-															for _, cmpEle := range cmpLit.Elts {
-																fmt.Printf("waaaaaaat %T\n", cmpEle)
-															}
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-
-							default:
-								//fmt.Printf("shhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeet %T\n", s)
-								s = nil
-								// dref1 := *s
-								// dref2 := *dref1
-								// for _, zoop := range dref2.List {
-								// fmt.Println(zoop)
-						}*/
-
 						// Range through composite elements
 						for _, cmpEle := range cmpLit.Elts {
 							kv, ok := cmpEle.(*ast.KeyValueExpr)
@@ -313,6 +273,18 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 									// fmt.Printf("val %T\n", kv.Value)
 									possibleCast, ok := kv.Value.(*ast.CallExpr)
 									if ok {
+										// we need to find the underlying type
+
+										for _, arg := range possibleCast.Args {
+											fmt.Printf("posty %T\n", arg)
+											// basic lit for builtin casts
+											bl, ok := arg.(*ast.BasicLit)
+											if ok {
+												fmt.Println("	" + bl.Kind.String())
+											}
+
+											///ast.Ident for typedef casts
+										}
 										// we have an ident here
 										valueIdent, ok := possibleCast.Fun.(*ast.Ident)
 										if ok {
@@ -320,41 +292,20 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 											//TODO nil check on obj
 											fmt.Printf(" WINFO	%v %v %v\n", structName.Name, keyIdent.Name, valueIdent.Name) // hello i am a uint32 part of kv struct
 
-											//TODO later optimize with go generate
-											src := []byte(`
-												package hw
-												
-												import ( 
-												"fmt"
-												"reflect"
-												)
+											//valueIdent.Name is the cast, but we need to find what the underlying type on that cast is
 
-												var typeRegistry = make(map[string]reflect.Type)
-												
-												func init() {
-													typeRegistry["theStruct"] = reflect.TypeOf(theStruct{})
-												}
-												
-												func Zoop() {
-													fmt.Println("hello world")
-												}
-												`)
-											f, err := os.Create("src/" + v.currentPackage + "/test.go")
-											if err != nil {
-												panic(err)
-											}
-											defer f.Close()
-											if _, err := f.Write(src); err != nil {
-												panic(err)
+											fInfo := fieldInfo{
+												name:  keyIdent.Name,
+												fType: valueIdent.Name,
 											}
 
-											// build out this string with current package
-											out, err := exec.Command("sh", "-c", "gorram "+v.currentPackage+" Zoop").Output()
-											if err != nil {
-												panic(err)
+											structRegistry, ok := pkgRegistry[v.currentPackage]
+											if !ok {
+												pkgRegistry[v.currentPackage] = make(map[string][]fieldInfo)
+												structRegistry = pkgRegistry[v.currentPackage]
 											}
 
-											fmt.Println(string(out))
+											structRegistry[structName.Name] = append(structRegistry[structName.Name], fInfo)
 
 											// primitive cast - uint32
 											// SO what we need to figure out is how to map the primitive name to the field type of the struct
@@ -412,4 +363,135 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	}
 
 	return v
+}
+
+func (v *returnsVisitor) Process() {
+
+	/*
+
+		//TODO later optimize with go
+
+		//TODO need to handle on a per package basis
+
+		// what we need here is to pass all the information we know - (field names and field types)
+		// and then compare them against what is in the registry. I think we can take a variety of approaches here
+		// (more complex object inside of map), ugly ifs hardcoded (nty)
+
+		// we should also move this outside the loop
+		src := []byte(`
+			package hw
+
+			import (
+			"fmt"
+			"reflect"
+			)
+
+			type astField struct {
+				name string
+				fType string
+			}
+
+			type structType struct {
+					rType reflect.Type
+					aField []astField
+			}
+
+			var typeRegistry = make(map[string]structType)
+
+			func init() {
+				typeRegistry["theStruct"] = structType{rType: reflect.TypeOf(theStruct{})}
+			}
+
+			func Zoop() {
+				fmt.Println("hello world")
+			}
+			`)
+		f, err := os.Create("src/" + v.currentPackage + "/test.go")
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		//TODO defer removing the file
+
+		if _, err := f.Write(src); err != nil {
+			panic(err)
+		}
+
+		// build out this string with current package
+		out, err := exec.Command("sh", "-c", "gorram "+v.currentPackage+" Zoop").Output()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(string(out))
+
+
+
+
+	*/
+
+	//TODO we'll probably hav to run goimports
+	for pkg, structRegistry := range pkgRegistry {
+		f, err := os.Create("src/" + v.currentPackage + "/test.go")
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		/*
+					func init() {
+				typeRegistry["theStruct"] = //structType{rType: reflect.TypeOf(theStruct{}), aField:[]astField{name:"hi",fType:"yO"}}
+			}
+
+			func Zoop() {
+				fmt.Println("hello world")
+			}
+		*/
+		//TODO defer removing the file (either hack a defer by using an inline function or explictly remove it)
+		src := `package ` + pkg + `
+
+		import (
+			"fmt"
+			"reflect"
+			)
+
+			type astField struct {
+				name string
+				fType string
+			}
+
+			type structType struct {
+					rType reflect.Type
+					aField []astField
+			}
+
+			var typeRegistry = make(map[string]string)
+			func Zoop() {
+
+
+		`
+		//TODO need to come up with unique names
+		for structName, fieldInfo := range structRegistry {
+			for _, field := range fieldInfo {
+				src = src + field.name + `, ok := reflect.TypeOf(` + structName + `{}).FieldByName("` + field.name + `")` + `
+				if ok &&` + field.name + `.Type.Name() == "` + field.fType + `"{` + ` 
+					fmt.Println("wobbie")
+				}
+				`
+			}
+
+		}
+		src = src + `}`
+		if _, err := f.Write([]byte(src)); err != nil {
+			panic(err)
+		}
+
+		// build out this string with current package
+		out, err := exec.Command("sh", "-c", "gorram "+v.currentPackage+" Zoop").Output()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(string(out))
+	}
+
 }
