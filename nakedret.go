@@ -14,6 +14,8 @@ import (
 	"strings"
 )
 
+//TODO ensure there are prellocations in the make - (type, size, cap)
+// then see the append lines up with the preallocate
 const (
 	pwd = "./"
 )
@@ -168,46 +170,94 @@ func exists(filename string) bool {
 }
 
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
-	var namedReturns []*ast.Ident
 
-	funcDecl, ok := node.(*ast.FuncDecl)
-	if !ok {
-		return v
-	}
-	var functionLineLength int
-	// We've found a function
-	if funcDecl.Type != nil && funcDecl.Type.Results != nil {
-		for _, field := range funcDecl.Type.Results.List {
-			for _, ident := range field.Names {
-				if ident != nil {
-					namedReturns = append(namedReturns, ident)
-				}
-			}
-		}
-		file := v.f.File(funcDecl.Pos())
-		functionLineLength = file.Position(funcDecl.End()).Line - file.Position(funcDecl.Pos()).Line
-	}
+	var makes []string
 
-	if len(namedReturns) > 0 && funcDecl.Body != nil {
-		// Scan the body for usage of the named returns
-		for _, stmt := range funcDecl.Body.List {
+	switch n := node.(type) {
+	case *ast.FuncDecl:
+		// var foundMake bool // this will need to be a list
+		if n.Body != nil {
+			for _, stmt := range n.Body.List {
+				switch s := stmt.(type) {
+				case *ast.AssignStmt:
+					// loop through assignment to determine if it's a make
+					for _, expr := range s.Rhs {
+						callExpr, ok := expr.(*ast.CallExpr)
+						if !ok {
+							continue // should this be break?
+						}
+						ident, ok := callExpr.Fun.(*ast.Ident)
+						if !ok {
+							continue
+						}
+						if ident.Name == "make" {
+							// check callExpr args
+							for _, arg := range callExpr.Args {
+								// we only want to suggest this for maps, not slices - this may be caught by just using append
+								_, ok := arg.(*ast.ArrayType)
+								if !ok {
+									continue
+								}
+								//assign the fact that we have a slice here
 
-			switch s := stmt.(type) {
-			case *ast.ReturnStmt:
-				if len(s.Results) == 0 {
-					file := v.f.File(s.Pos())
-					if file != nil && uint(functionLineLength) > v.maxLength {
-						if funcDecl.Name != nil {
-							log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
+								// get the name of the struct being made - TODO support double declarations?
+								if len(s.Lhs) == 1 {
+									// makes  = append(makes, s.Lhs[0])
+									lhsIdent, ok := s.Lhs[0].(*ast.Ident)
+									if !ok {
+										continue
+									}
+									makes = append(makes, lhsIdent.Name)
+								} else if len(s.Lhs) > 1 {
+									fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@ wat lhs > 1")
+								}
+
+								// *********** we have a make with a slice inside, now we need to see if we have a for loop
+
+							}
 						}
 					}
-					continue
-				}
 
-			default:
+				case *ast.RangeStmt: // for statement should literally duplicate this
+					if len(makes) == 0 {
+						continue
+					}
+					if s.Body != nil {
+						for _, stmt := range s.Body.List {
+							asgnStmt, ok := stmt.(*ast.AssignStmt)
+							if !ok {
+								continue
+							}
+							for _, expr := range asgnStmt.Rhs {
+								callExpr, ok := expr.(*ast.CallExpr)
+								if !ok {
+									continue // should this be break? comes back to multi-call support I think
+								}
+								ident, ok := callExpr.Fun.(*ast.Ident)
+								if !ok {
+									continue
+								}
+								if ident.Name == "append" {
+									file := v.f.File(ident.Pos())
+									lineNumber := file.Position(ident.Pos()).Line
+									fmt.Printf("%v:%v Consider indexing instead of appending here\n", file.Name(), lineNumber)
+								}
+							}
+
+						}
+					}
+
+				default:
+				}
 			}
 		}
+
+	default:
+		return v
+
 	}
+
+	// We've found a function
 
 	return v
 }
