@@ -94,3 +94,10 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 
 Pull requests welcome!
 
+
+## Other static analysis tools
+
+If you've enjoyed nakedret, take a look at my other static anaylsis tools!
+
+- [unimport](https://github.com/alexkohler/unimport) - Finds unnecessary import aliases
+- [prealloc](https://github.com/alexkohler/prealloc) - Finds slice declarations that could potentially be preallocated.
