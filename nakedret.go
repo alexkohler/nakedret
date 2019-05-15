@@ -50,7 +50,14 @@ func main() {
 	}
 }
 
+type f struct{}
+
+func (f) Lol() {}
+
 func checkNakedReturns(args []string, maxLength *uint) error {
+
+	myF := f{}
+	myF.Lol()
 
 	fset := token.NewFileSet()
 
@@ -167,47 +174,76 @@ func exists(filename string) bool {
 	return err == nil
 }
 
-func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
-	var namedReturns []*ast.Ident
+//TODO - could also look for methods with receivers that don't actually use the receiver? eh
 
-	funcDecl, ok := node.(*ast.FuncDecl)
+func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+
+	// search for call expressions
+	callExpr, ok := node.(*ast.CallExpr)
 	if !ok {
 		return v
 	}
-	var functionLineLength int
+
+	file := v.f.File(callExpr.Pos())
+	// fmt.Printf("%v:%v got one %T\n", file.Name(), file.Position(callExpr.Pos()).Line, callExpr.Fun)
+
+	selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return v
+	}
+
+	// if selExpr.Sel != nil {
+	// 	selIden, ok := selExpr.Sel.
+	// }
+
+	ident, ok := selExpr.X.(*ast.Ident)
+	if !ok {
+		return v
+	}
+
+	if ident.Obj != nil {
+		fmt.Printf("%v:%v got one %T\n", file.Name(), file.Position(callExpr.Pos()).Line, selExpr.X)
+		fmt.Printf("I have a receiver with name %+v\n", ident.Obj.Name)
+
+		receiverName := ident.Obj.Name
+		fmt.Println(receiverName)
+		// Next up is to check if there are any receivers
+	}
+
+	// var functionLineLength int
 	// We've found a function
-	if funcDecl.Type != nil && funcDecl.Type.Results != nil {
-		for _, field := range funcDecl.Type.Results.List {
-			for _, ident := range field.Names {
-				if ident != nil {
-					namedReturns = append(namedReturns, ident)
-				}
-			}
-		}
-		file := v.f.File(funcDecl.Pos())
-		functionLineLength = file.Position(funcDecl.End()).Line - file.Position(funcDecl.Pos()).Line
-	}
+	// if funcDecl.Type != nil && funcDecl.Type.Results != nil {
+	// 	for _, field := range funcDecl.Type.Results.List {
+	// 		for _, ident := range field.Names {
+	// 			if ident != nil {
+	// 				namedReturns = append(namedReturns, ident)
+	// 			}
+	// 		}
+	// 	}
+	// 	file := v.f.File(funcDecl.Pos())
+	// 	functionLineLength = file.Position(funcDecl.End()).Line - file.Position(funcDecl.Pos()).Line
+	// }
 
-	if len(namedReturns) > 0 && funcDecl.Body != nil {
-		// Scan the body for usage of the named returns
-		for _, stmt := range funcDecl.Body.List {
+	// if len(namedReturns) > 0 && funcDecl.Body != nil {
+	// 	// Scan the body for usage of the named returns
+	// 	for _, stmt := range funcDecl.Body.List {
 
-			switch s := stmt.(type) {
-			case *ast.ReturnStmt:
-				if len(s.Results) == 0 {
-					file := v.f.File(s.Pos())
-					if file != nil && uint(functionLineLength) > v.maxLength {
-						if funcDecl.Name != nil {
-							log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
-						}
-					}
-					continue
-				}
+	// 		switch s := stmt.(type) {
+	// 		case *ast.ReturnStmt:
+	// 			if len(s.Results) == 0 {
+	// 				file := v.f.File(s.Pos())
+	// 				if file != nil && uint(functionLineLength) > v.maxLength {
+	// 					if funcDecl.Name != nil {
+	// 						log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
+	// 					}
+	// 				}
+	// 				continue
+	// 			}
 
-			default:
-			}
-		}
-	}
+	// 		default:
+	// 		}
+	// 	}
+	// }
 
 	return v
 }
