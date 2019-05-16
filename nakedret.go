@@ -12,6 +12,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/ssa"
+
+	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 const (
@@ -68,6 +73,36 @@ func checkNakedReturns(args []string, maxLength *uint) error {
 
 	if maxLength == nil {
 		return errors.New("max length nil")
+	}
+
+	// Load, parse, and type-check the whole program.
+	cfg := packages.Config{Mode: packages.LoadAllSyntax}
+	//TODO - don't hardcode package
+	initial, err := packages.Load(&cfg, "_/home/alex/workspace/nakedret") // this package needs to be imported
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create SSA packages for well-typed packages and their dependencies.
+	ssaProg, _ := ssautil.AllPackages(initial, 0)
+
+	ssaProg.Build()
+
+	functionsMap := ssautil.AllFunctions(ssaProg)
+
+	fmt.Println(len(functionsMap))
+
+	nameMap := make(map[string]*ssa.Function)
+	for f := range functionsMap {
+		if f.Signature.Results().Len() > 0 {
+			fmt.Printf("funcName %v results %v\n", f.String(), f.Signature.Results().Underlying().String())
+		} else {
+			fmt.Printf("funcName %v results none\n", f.String())
+		}
+		nameMap[f.String()] = f
+		// if i == 5 {
+		// 	break
+		// }
 	}
 
 	retVis := &returnsVisitor{
@@ -174,9 +209,28 @@ func exists(filename string) bool {
 	return err == nil
 }
 
+// Other ideas - see if you can see where returns are being ignored i.e. client.Close() should be _ = client.Close()
+// AssignStmt - LHS is empty?
+
 //TODO - could also look for methods with receivers that don't actually use the receiver? eh
 
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+
+	// os.Stat("hihiihihihi")
+
+	// // search for call expressions
+	// assignStmt, ok := node.(*ast.AssignStmt)
+	// if !ok {
+	// 	return v
+	// }
+
+	// file := v.f.File(assignStmt.Pos())
+	// // fmt.Printf("%v:%v got one %T\n", file.Name(), file.Position(assignStmt.Pos()).Line, assignStmt.Fun)
+
+	// fmt.Printf("%v:%v got one\n", file.Name(), file.Position(assignStmt.Pos()).Line)
+	// fmt.Printf("I have a LHS assignment with size %+v\n", len(assignStmt.Lhs))
+
+	// Next up is to check if there are any receivers
 
 	// search for call expressions
 	callExpr, ok := node.(*ast.CallExpr)
@@ -184,8 +238,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		return v
 	}
 
-	file := v.f.File(callExpr.Pos())
-	// fmt.Printf("%v:%v got one %T\n", file.Name(), file.Position(callExpr.Pos()).Line, callExpr.Fun)
+	// file := v.f.File(callExpr.Pos())
 
 	selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
 	if !ok {
@@ -201,49 +254,20 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		return v
 	}
 
-	if ident.Obj != nil {
-		fmt.Printf("%v:%v got one %T\n", file.Name(), file.Position(callExpr.Pos()).Line, selExpr.X)
-		fmt.Printf("I have a receiver with name %+v\n", ident.Obj.Name)
-
-		receiverName := ident.Obj.Name
-		fmt.Println(receiverName)
-		// Next up is to check if there are any receivers
+	if selExpr.Sel != nil {
+		// fmt.Printf("@@@ nonFunction qualifier %v.%v\n", ident.Name, selExpr.Sel.Name)
+	} else {
+		panic("haha i am in danger")
 	}
 
-	// var functionLineLength int
-	// We've found a function
-	// if funcDecl.Type != nil && funcDecl.Type.Results != nil {
-	// 	for _, field := range funcDecl.Type.Results.List {
-	// 		for _, ident := range field.Names {
-	// 			if ident != nil {
-	// 				namedReturns = append(namedReturns, ident)
-	// 			}
-	// 		}
-	// 	}
-	// 	file := v.f.File(funcDecl.Pos())
-	// 	functionLineLength = file.Position(funcDecl.End()).Line - file.Position(funcDecl.Pos()).Line
-	// }
+	if ident.Obj != nil {
+		// receiverName := ident.Obj.Name
 
-	// if len(namedReturns) > 0 && funcDecl.Body != nil {
-	// 	// Scan the body for usage of the named returns
-	// 	for _, stmt := range funcDecl.Body.List {
+		// fmt.Printf("~~ I have a receiver with name %v.%v\n", ident.Name, selExpr.Sel.Name)
 
-	// 		switch s := stmt.(type) {
-	// 		case *ast.ReturnStmt:
-	// 			if len(s.Results) == 0 {
-	// 				file := v.f.File(s.Pos())
-	// 				if file != nil && uint(functionLineLength) > v.maxLength {
-	// 					if funcDecl.Name != nil {
-	// 						log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
-	// 					}
-	// 				}
-	// 				continue
-	// 			}
-
-	// 		default:
-	// 		}
-	// 	}
-	// }
+		// fmt.Println(receiverName)
+		// Next up is to check if there are any receivers
+	}
 
 	return v
 }
