@@ -9,14 +9,10 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/tools/go/ssa"
-
-	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 const (
@@ -49,8 +45,9 @@ func main() {
 	maxLength := flag.Uint("l", 5, "maximum number of lines for a naked return function")
 	flag.Usage = usage
 	flag.Parse()
+	i := rand.Int()
 
-	if err := checkNakedReturns(flag.Args(), maxLength); err != nil {
+	if err := checkNakedReturns(flag.Args(), maxLength, i); err != nil {
 		log.Println(err)
 	}
 }
@@ -59,7 +56,7 @@ type f struct{}
 
 func (f) Lol() {}
 
-func checkNakedReturns(args []string, maxLength *uint) error {
+func checkNakedReturns(args []string, maxLength *uint, unused int) error {
 
 	myF := f{}
 	myF.Lol()
@@ -73,36 +70,6 @@ func checkNakedReturns(args []string, maxLength *uint) error {
 
 	if maxLength == nil {
 		return errors.New("max length nil")
-	}
-
-	// Load, parse, and type-check the whole program.
-	cfg := packages.Config{Mode: packages.LoadAllSyntax}
-	//TODO - don't hardcode package
-	initial, err := packages.Load(&cfg, "_/home/alex/workspace/nakedret") // this package needs to be imported
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Create SSA packages for well-typed packages and their dependencies.
-	ssaProg, _ := ssautil.AllPackages(initial, 0)
-
-	ssaProg.Build()
-
-	functionsMap := ssautil.AllFunctions(ssaProg)
-
-	fmt.Println(len(functionsMap))
-
-	nameMap := make(map[string]*ssa.Function)
-	for f := range functionsMap {
-		if f.Signature.Results().Len() > 0 {
-			fmt.Printf("funcName %v results %v\n", f.String(), f.Signature.Results().Underlying().String())
-		} else {
-			fmt.Printf("funcName %v results none\n", f.String())
-		}
-		nameMap[f.String()] = f
-		// if i == 5 {
-		// 	break
-		// }
 	}
 
 	retVis := &returnsVisitor{
@@ -233,41 +200,140 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	// Next up is to check if there are any receivers
 
 	// search for call expressions
-	callExpr, ok := node.(*ast.CallExpr)
+	funcDecl, ok := node.(*ast.FuncDecl)
 	if !ok {
 		return v
 	}
 
-	// file := v.f.File(callExpr.Pos())
+	paramMap := make(map[string]bool)
 
-	selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
-	if !ok {
+	if funcDecl.Type != nil && funcDecl.Type.Params != nil {
+		for _, paramList := range funcDecl.Type.Params.List {
+			for _, name := range paramList.Names {
+				paramMap[name.Name] = false
+			}
+		}
+	}
+
+	fmt.Printf("%v::: %v\n", funcDecl.Name.Name, paramMap)
+	if len(paramMap) == 0 {
 		return v
 	}
 
-	// if selExpr.Sel != nil {
-	// 	selIden, ok := selExpr.Sel.
-	// }
+	file := v.f.File(funcDecl.Pos())
 
-	ident, ok := selExpr.X.(*ast.Ident)
-	if !ok {
-		return v
+	// Analyze body of function
+	for len(funcDecl.Body.List) != 0 {
+		// log.Printf("--------------%v %T\n", stmt.
+		stmt := funcDecl.Body.List[0]
+
+		switch s := stmt.(type) {
+		case *ast.IfStmt:
+			// Either variable is in condition or body
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body)
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Cond}, funcDecl.Body.List)
+
+		case *ast.AssignStmt:
+			//TODO left and right sides?
+			funcDecl.Body.List = processExpr(paramMap, s.Lhs, funcDecl.Body.List)
+			funcDecl.Body.List = processExpr(paramMap, s.Rhs, funcDecl.Body.List)
+
+		case *ast.BlockStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.List...)
+
+		case *ast.ReturnStmt:
+			funcDecl.Body.List = processExpr(paramMap, s.Results, funcDecl.Body.List)
+
+		case *ast.DeclStmt:
+			switch d := s.Decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					//TODO - i think we only care about valuespec here
+					vSpec, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						fmt.Printf(">>>missing spec type %T", vSpec)
+						continue
+					}
+					handleIdents(paramMap, vSpec.Names)
+				}
+
+			default:
+				fmt.Printf("## decl type not handled %T\n", d)
+			}
+
+		case *ast.ExprStmt:
+			exprStmt, ok := s.X.(*ast.CallExpr)
+			if !ok {
+				fmt.Printf(">>>missing spec type %T", s.X)
+			}
+
+			funcDecl.Body.List = processExpr(paramMap, exprStmt.Args, funcDecl.Body.List)
+
+		default:
+			fmt.Printf("~~~~ missing type %T\n", s)
+
+		}
+
+		funcDecl.Body.List = funcDecl.Body.List[1:]
 	}
 
-	if selExpr.Sel != nil {
-		// fmt.Printf("@@@ nonFunction qualifier %v.%v\n", ident.Name, selExpr.Sel.Name)
-	} else {
-		panic("haha i am in danger")
+	if file != nil {
+		if funcDecl.Name != nil {
+			log.Printf("--------------%v:%v %v found unnn \n", file.Name(), file.Position(funcDecl.Pos()).Line, funcDecl.Name.Name)
+		}
 	}
 
-	if ident.Obj != nil {
-		// receiverName := ident.Obj.Name
-
-		// fmt.Printf("~~ I have a receiver with name %v.%v\n", ident.Name, selExpr.Sel.Name)
-
-		// fmt.Println(receiverName)
-		// Next up is to check if there are any receivers
+	for key, val := range paramMap {
+		if !val {
+			fmt.Printf("noooooooooooooooooooo %v\n", key)
+		} else {
+			// fmt.Printf("yesss %v\n", key)
+		}
 	}
 
 	return v
+}
+
+func handleIdents(paramMap map[string]bool, identList []*ast.Ident) {
+	for _, ident := range identList {
+		handleIdent(paramMap, ident)
+	}
+}
+
+func handleIdent(paramMap map[string]bool, ident *ast.Ident) {
+	if _, ok := paramMap[ident.Name]; ok {
+		paramMap[ident.Name] = true
+	}
+}
+
+func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.Stmt) []ast.Stmt {
+	for len(exprList) != 0 {
+		expr := exprList[0]
+		switch e := expr.(type) {
+		case *ast.Ident:
+			handleIdent(paramMap, e)
+		case *ast.BinaryExpr:
+			exprList = append(exprList, e.X) //TODO, do we need to then worry about x.left being used?
+			exprList = append(exprList, e.Y) //TODO, do we need to then worry about x.left being used?
+		case *ast.FuncLit:
+			stmtList = append(stmtList, e.Body)
+		case *ast.BasicLit:
+			// nothing to do here, no variable name
+		case *ast.SelectorExpr:
+			exprList = append(exprList, e.X)
+			handleIdent(paramMap, e.Sel)
+		case *ast.CompositeLit:
+			exprList = append(exprList, e.Elts...)
+
+		case *ast.CallExpr:
+			exprList = append(exprList, e.Args...)
+			exprList = append(exprList, e.Fun)
+
+		default:
+			fmt.Printf("@@@@@@@@@@ missing type %T\n", e)
+		}
+		exprList = exprList[1:]
+	}
+
+	return stmtList
 }
