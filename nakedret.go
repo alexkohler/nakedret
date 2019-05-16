@@ -262,14 +262,44 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 			}
 
 		case *ast.ExprStmt:
-			exprStmt, ok := s.X.(*ast.CallExpr)
-			if !ok {
-				fmt.Printf(">>>missing spec type %T", s.X)
-			}
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.X}, funcDecl.Body.List)
 
-			funcDecl.Body.List = processExpr(paramMap, exprStmt.Args, funcDecl.Body.List)
+		case *ast.RangeStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body)
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.X}, funcDecl.Body.List)
+
+		case *ast.ForStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body)
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Cond}, funcDecl.Body.List)
+
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Post)
+
+		case *ast.TypeSwitchStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body, s.Assign, s.Init)
+
+		case *ast.CaseClause:
+			funcDecl.Body.List = processExpr(paramMap, s.List, funcDecl.Body.List)
+
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body...)
+
+		case *ast.SendStmt:
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Chan, s.Value}, funcDecl.Body.List)
+
+		case *ast.GoStmt:
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Call}, funcDecl.Body.List)
+
+		case *ast.DeferStmt:
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Call}, funcDecl.Body.List)
+
+		case *ast.SelectStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body)
+
+		case *ast.CommClause:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body...)
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Comm)
 
 		default:
+			// nils will happen here without nil checks on my appends, meh
 			fmt.Printf("~~~~ missing type %T\n", s)
 
 		}
@@ -328,6 +358,37 @@ func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.S
 		case *ast.CallExpr:
 			exprList = append(exprList, e.Args...)
 			exprList = append(exprList, e.Fun)
+
+		case *ast.IndexExpr:
+			exprList = append(exprList, e.X)
+			exprList = append(exprList, e.Index)
+
+		case *ast.SliceExpr:
+			exprList = append(exprList, e.Low, e.High, e.Max, e.X)
+
+		case *ast.TypeAssertExpr:
+			exprList = append(exprList, e.X, e.Type)
+
+		case *ast.StarExpr:
+			exprList = append(exprList, e.X)
+
+		case *ast.UnaryExpr:
+			exprList = append(exprList, e.X)
+
+		case *ast.MapType:
+			exprList = append(exprList, e.Key, e.Value)
+
+		case *ast.KeyValueExpr:
+			exprList = append(exprList, e.Key, e.Value)
+
+		case *ast.ArrayType:
+			//TODO - is len needed here?
+			exprList = append(exprList, e.Elt, e.Len)
+
+			//TODO - struct type is trouble
+
+		case *ast.ChanType:
+			exprList = append(exprList, e.Value)
 
 		default:
 			fmt.Printf("@@@@@@@@@@ missing type %T\n", e)
