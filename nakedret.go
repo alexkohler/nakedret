@@ -210,12 +210,15 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	if funcDecl.Type != nil && funcDecl.Type.Params != nil {
 		for _, paramList := range funcDecl.Type.Params.List {
 			for _, name := range paramList.Names {
+				if name.Name == "_" {
+					continue
+				}
 				paramMap[name.Name] = false
 			}
 		}
 	}
 
-	fmt.Printf("%v::: %v\n", funcDecl.Name.Name, paramMap)
+	// fmt.Printf("%v::: %v\n", funcDecl.Name.Name, paramMap)
 	if len(paramMap) == 0 {
 		return v
 	}
@@ -230,7 +233,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		switch s := stmt.(type) {
 		case *ast.IfStmt:
 			// Either variable is in condition or body
-			funcDecl.Body.List = append(funcDecl.Body.List, s.Body)
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body, s.Init, s.Else)
 			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Cond}, funcDecl.Body.List)
 
 		case *ast.AssignStmt:
@@ -249,12 +252,15 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 			case *ast.GenDecl:
 				for _, spec := range d.Specs {
 					//TODO - i think we only care about valuespec here
-					vSpec, ok := spec.(*ast.ValueSpec)
-					if !ok {
-						fmt.Printf(">>>missing spec type %T", vSpec)
-						continue
+
+					switch specType := spec.(type) {
+					case *ast.ValueSpec:
+						handleIdents(paramMap, specType.Names)
+						funcDecl.Body.List = processExpr(paramMap, []ast.Expr{specType.Type}, funcDecl.Body.List)
+						funcDecl.Body.List = processExpr(paramMap, specType.Values, funcDecl.Body.List)
+
 					}
-					handleIdents(paramMap, vSpec.Names)
+
 				}
 
 			default:
@@ -298,6 +304,21 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 			funcDecl.Body.List = append(funcDecl.Body.List, s.Body...)
 			funcDecl.Body.List = append(funcDecl.Body.List, s.Comm)
 
+		case *ast.BranchStmt:
+			handleIdent(paramMap, s.Label)
+
+		case *ast.SwitchStmt:
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Body, s.Init)
+			funcDecl.Body.List = processExpr(paramMap, []ast.Expr{s.Tag}, funcDecl.Body.List)
+
+		case *ast.LabeledStmt:
+			// this one is kinda weird
+			handleIdent(paramMap, s.Label)
+			funcDecl.Body.List = append(funcDecl.Body.List, s.Stmt)
+
+		case nil, *ast.IncDecStmt:
+			//no-op
+
 		default:
 			// nils will happen here without nil checks on my appends, meh
 			fmt.Printf("~~~~ missing type %T\n", s)
@@ -307,14 +328,13 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		funcDecl.Body.List = funcDecl.Body.List[1:]
 	}
 
-	if file != nil {
-		if funcDecl.Name != nil {
-			log.Printf("--------------%v:%v %v found unnn \n", file.Name(), file.Position(funcDecl.Pos()).Line, funcDecl.Name.Name)
-		}
-	}
-
 	for key, val := range paramMap {
 		if !val {
+			if file != nil {
+				if funcDecl.Name != nil {
+					log.Printf("--------------%v:%v %v found unnn  ------------\n", file.Name(), file.Position(funcDecl.Pos()).Line, funcDecl.Name.Name)
+				}
+			}
 			fmt.Printf("noooooooooooooooooooo %v\n", key)
 		} else {
 			// fmt.Printf("yesss %v\n", key)
@@ -331,6 +351,9 @@ func handleIdents(paramMap map[string]bool, identList []*ast.Ident) {
 }
 
 func handleIdent(paramMap map[string]bool, ident *ast.Ident) {
+	if ident == nil {
+		return
+	}
 	if _, ok := paramMap[ident.Name]; ok {
 		paramMap[ident.Name] = true
 	}
@@ -385,10 +408,22 @@ func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.S
 			//TODO - is len needed here?
 			exprList = append(exprList, e.Elt, e.Len)
 
-			//TODO - struct type is trouble
+			//TODO - struct type and interface type are trouble with fieldList
 
 		case *ast.ChanType:
 			exprList = append(exprList, e.Value)
+
+		case *ast.ParenExpr:
+			exprList = append(exprList, e.X)
+
+		case *ast.StructType:
+			exprList, stmtList = processFieldList(paramMap, e.Fields, exprList, stmtList)
+
+		case *ast.InterfaceType:
+			exprList, stmtList = processFieldList(paramMap, e.Methods, exprList, stmtList)
+
+		case nil:
+			// no op
 
 		default:
 			fmt.Printf("@@@@@@@@@@ missing type %T\n", e)
@@ -397,4 +432,16 @@ func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.S
 	}
 
 	return stmtList
+}
+
+func processFieldList(paramMap map[string]bool, fieldList *ast.FieldList, exprList []ast.Expr, stmtList []ast.Stmt) ([]ast.Expr, []ast.Stmt) {
+
+	for _, field := range fieldList.List {
+		exprList = append(exprList, field.Type)
+		handleIdents(paramMap, field.Names)
+
+		// don't care about Tag, need to handle ident and expr
+	}
+
+	return exprList, stmtList
 }
