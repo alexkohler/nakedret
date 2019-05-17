@@ -219,7 +219,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	}
 
 	// fmt.Printf("%v::: %v\n", funcDecl.Name.Name, paramMap)
-	if len(paramMap) == 0 {
+	if len(paramMap) == 0 || funcDecl.Body == nil {
 		return v
 	}
 
@@ -316,7 +316,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 			handleIdent(paramMap, s.Label)
 			funcDecl.Body.List = append(funcDecl.Body.List, s.Stmt)
 
-		case nil, *ast.IncDecStmt:
+		case nil, *ast.IncDecStmt, *ast.EmptyStmt:
 			//no-op
 
 		default:
@@ -332,12 +332,10 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		if !val {
 			if file != nil {
 				if funcDecl.Name != nil {
-					log.Printf("--------------%v:%v %v found unnn  ------------\n", file.Name(), file.Position(funcDecl.Pos()).Line, funcDecl.Name.Name)
+					//TODO print parameter vs parameter(s)?
+					log.Printf("%v:%v %v found unused parameter %v\n", file.Name(), file.Position(funcDecl.Pos()).Line, funcDecl.Name.Name, key)
 				}
 			}
-			fmt.Printf("noooooooooooooooooooo %v\n", key)
-		} else {
-			// fmt.Printf("yesss %v\n", key)
 		}
 	}
 
@@ -422,6 +420,13 @@ func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.S
 		case *ast.InterfaceType:
 			exprList, stmtList = processFieldList(paramMap, e.Methods, exprList, stmtList)
 
+		case *ast.FuncType:
+			exprList, stmtList = processFieldList(paramMap, e.Params, exprList, stmtList)
+			exprList, stmtList = processFieldList(paramMap, e.Results, exprList, stmtList)
+
+		case *ast.Ellipsis:
+			exprList = append(exprList, e.Elt)
+
 		case nil:
 			// no op
 
@@ -435,6 +440,9 @@ func processExpr(paramMap map[string]bool, exprList []ast.Expr, stmtList []ast.S
 }
 
 func processFieldList(paramMap map[string]bool, fieldList *ast.FieldList, exprList []ast.Expr, stmtList []ast.Stmt) ([]ast.Expr, []ast.Stmt) {
+	if fieldList == nil {
+		return exprList, stmtList
+	}
 
 	for _, field := range fieldList.List {
 		exprList = append(exprList, field.Type)

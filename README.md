@@ -83,10 +83,7 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 
 ## TODO
 
-- Unit tests (may require some refactoring to do correctly)
-- supporting toggling of `build.Context.UseAllFiles` may be useful for some. 
-- Configuration on whether or not to run on test files
-- Vim quickfix format?
+- Figure out differences between SSA vs AST approach
 
 
 ## Contributing
@@ -100,3 +97,5 @@ If you've enjoyed nakedret, take a look at my other static anaylsis tools!
 
 - [unimport](https://github.com/alexkohler/unimport) - Finds unnecessary import aliases
 - [prealloc](https://github.com/alexkohler/prealloc) - Finds slice declarations that could potentially be preallocated.
+
+
