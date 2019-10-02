@@ -1,13 +1,16 @@
 package main
 
 import (
-	"errors"
+	"bytes"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/build"
+	"go/format"
 	"go/parser"
+	"go/printer"
 	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -34,6 +37,9 @@ func usage() {
 type returnsVisitor struct {
 	f         *token.FileSet
 	maxLength uint
+
+	shouldFix bool
+	hasNaked  *bool
 }
 
 func main() {
@@ -42,119 +48,46 @@ func main() {
 	log.SetFlags(0)
 
 	maxLength := flag.Uint("l", 5, "maximum number of lines for a naked return function")
+	shouldFix := flag.Bool("fix", false, "whether or not the tool should fix the naked returns")
 	flag.Usage = usage
 	flag.Parse()
 
-	if err := checkNakedReturns(flag.Args(), maxLength); err != nil {
-		log.Println(err)
-	}
-}
-
-func checkNakedReturns(args []string, maxLength *uint) error {
-
-	fset := token.NewFileSet()
-
-	files, err := parseInput(args, fset)
+	err := doEverything(flag.Args(), *maxLength, *shouldFix)
 	if err != nil {
-		return fmt.Errorf("could not parse input %v", err)
+		log.Fatalf("Encountered an error: %+v", err)
+		os.Exit(1)
 	}
-
-	if maxLength == nil {
-		return errors.New("max length nil")
-	}
-
-	retVis := &returnsVisitor{
-		f:         fset,
-		maxLength: *maxLength,
-	}
-
-	for _, f := range files {
-		ast.Walk(retVis, f)
-	}
-
-	return nil
 }
 
-func parseInput(args []string, fset *token.FileSet) ([]*ast.File, error) {
-	var directoryList []string
-	var fileMode bool
-	files := make([]*ast.File, 0)
-
+func doEverything(args []string, maxLength uint, shouldFix bool) error {
 	if len(args) == 0 {
-		directoryList = append(directoryList, pwd)
-	} else {
-		for _, arg := range args {
-			if strings.HasSuffix(arg, "/...") && isDir(arg[:len(arg)-len("/...")]) {
+		// We're just going to check for the current directory
+		checkRequestedFiles(``, maxLength, shouldFix)
+		return nil
+	}
 
-				for _, dirname := range allPackagesInFS(arg) {
-					directoryList = append(directoryList, dirname)
-				}
-
-			} else if isDir(arg) {
-				directoryList = append(directoryList, arg)
-
-			} else if exists(arg) {
-				if strings.HasSuffix(arg, ".go") {
-					fileMode = true
-					f, err := parser.ParseFile(fset, arg, nil, 0)
-					if err != nil {
-						return nil, err
-					}
-					files = append(files, f)
-				} else {
-					return nil, fmt.Errorf("invalid file %v specified", arg)
+	for _, arg := range args {
+		if strings.HasSuffix(arg, "/...") && isDir(arg[:len(arg)-len("/...")]) {
+			checkRequestedFiles(arg, maxLength, shouldFix)
+		} else if isDir(arg) {
+			checkRequestedFiles(arg, maxLength, shouldFix)
+		} else if exists(arg) {
+			if strings.HasSuffix(arg, ".go") {
+				fset := token.NewFileSet()
+				f, err := parser.ParseFile(fset, arg, nil, parser.ParseComments)
+				err = checkNakedReturns(maxLength, shouldFix, fset, map[string]*ast.File{arg: f})
+				if err != nil {
+					return err
 				}
 			} else {
-
-				//TODO clean this up a bit
-				imPaths := importPaths([]string{arg})
-				for _, importPath := range imPaths {
-					pkg, err := build.Import(importPath, ".", 0)
-					if err != nil {
-						return nil, err
-					}
-					var stringFiles []string
-					stringFiles = append(stringFiles, pkg.GoFiles...)
-					// files = append(files, pkg.CgoFiles...)
-					stringFiles = append(stringFiles, pkg.TestGoFiles...)
-					if pkg.Dir != "." {
-						for i, f := range stringFiles {
-							stringFiles[i] = filepath.Join(pkg.Dir, f)
-						}
-					}
-
-					fileMode = true
-					for _, stringFile := range stringFiles {
-						f, err := parser.ParseFile(fset, stringFile, nil, 0)
-						if err != nil {
-							return nil, err
-						}
-						files = append(files, f)
-					}
-
-				}
+				return fmt.Errorf("invalid file %v specified", arg)
 			}
+		} else {
+			log.Printf("not sure what you want here\n")
 		}
 	}
 
-	// if we're not in file mode, then we need to grab each and every package in each directory
-	// we can to grab all the files
-	if !fileMode {
-		for _, fpath := range directoryList {
-			pkgs, err := parser.ParseDir(fset, fpath, nil, 0)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, pkg := range pkgs {
-				for _, f := range pkg.Files {
-					files = append(files, f)
-				}
-			}
-		}
-	}
-
-	return files, nil
+	return nil //files, nil
 }
 
 func isDir(filename string) bool {
@@ -165,6 +98,47 @@ func isDir(filename string) bool {
 func exists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
+}
+
+func checkNakedReturns(maxLength uint, shouldFix bool, fset *token.FileSet, files map[string]*ast.File) error {
+	hasNaked := false
+	retVis := &returnsVisitor{
+		f:         fset,
+		maxLength: maxLength,
+		shouldFix: shouldFix,
+		hasNaked:  &hasNaked,
+	}
+
+	updatedFiles := []*ast.File{}
+
+	for _, f := range files {
+		ast.Walk(retVis, f)
+		if hasNaked && shouldFix {
+			updatedFiles = append(updatedFiles, f)
+			hasNaked = false
+		}
+	}
+
+	if shouldFix {
+		for _, f := range updatedFiles {
+			file := fset.File(f.Package)
+			reportFile := file.Name()
+
+			fmt.Println(reportFile)
+			b := &bytes.Buffer{}
+			printer.Fprint(b, fset, f)
+
+			formatted, err := format.Source(b.Bytes())
+			if err != nil {
+				formatted = b.Bytes()
+				log.Printf("got error while formatting: %v\n", err)
+			}
+
+			ioutil.WriteFile(reportFile, formatted, os.ModeDevice)
+		}
+	}
+
+	return nil
 }
 
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
@@ -189,6 +163,10 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	}
 
 	if len(namedReturns) > 0 && funcDecl.Body != nil {
+		nameExprs := make([]ast.Expr, len(namedReturns))
+		for i := range namedReturns {
+			nameExprs[i] = namedReturns[i]
+		}
 		// Scan the body for usage of the named returns
 		for _, stmt := range funcDecl.Body.List {
 
@@ -199,6 +177,11 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 					if file != nil && uint(functionLineLength) > v.maxLength {
 						if funcDecl.Name != nil {
 							log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
+
+							if v.shouldFix {
+								s.Results = nameExprs
+								*v.hasNaked = true
+							}
 						}
 					}
 					continue
@@ -210,4 +193,77 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	}
 
 	return v
+}
+
+func checkRequestedFiles(dirName string, maxLength uint, shouldFix bool) {
+	path, err := filepath.Abs(dirName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	checkAllDirectories(path, maxLength, shouldFix)
+}
+
+func checkAllDirectories(path string, maxLength uint, shouldFix bool) {
+	_ = filepath.Walk(path, func(directory string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+
+		if _, folderName := filepath.Split(directory); folderName == `vendor` {
+			return filepath.SkipDir
+		}
+
+		allFiles, err := parseAllGoFilesInDir(directory, fset)
+		if err != nil {
+			return nil
+		}
+
+		err = checkNakedReturns(maxLength, shouldFix, fset, allFiles)
+		if err != nil {
+			log.Printf("got error: %+v\n", err)
+			return nil
+		}
+		return nil
+	})
+}
+
+func parseAllGoFilesInDir(dir string, fset *token.FileSet) (map[string]*ast.File, error) {
+	files := map[string]*ast.File{}
+
+	_ = filepath.Walk(dir, func(filename string, info os.FileInfo, err error) error {
+		if info == nil {
+			return nil
+		}
+		if info.IsDir() {
+			if dir != filename {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if filepath.Ext(filename) != `.go` {
+			return nil
+		}
+
+		bytes, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return err
+		}
+
+		f, err := parser.ParseFile(fset, filename, bytes, parser.ParseComments)
+		if err != nil {
+			return nil
+		}
+
+		files[filename] = f
+		return nil
+	})
+
+	return files, nil
 }
