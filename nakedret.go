@@ -52,17 +52,15 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	err := doEverything(flag.Args(), *maxLength, *shouldFix)
-	if err != nil {
+	if err := run(flag.Args(), *maxLength, *shouldFix); err != nil {
 		log.Fatalf("Encountered an error: %+v", err)
-		os.Exit(1)
 	}
 }
 
-func doEverything(args []string, maxLength uint, shouldFix bool) error {
+func run(args []string, maxLength uint, shouldFix bool) error {
 	if len(args) == 0 {
 		// We're just going to check for the current directory
-		checkRequestedFiles(``, maxLength, shouldFix)
+		checkRequestedFiles("", maxLength, shouldFix)
 		return nil
 	}
 
@@ -75,6 +73,9 @@ func doEverything(args []string, maxLength uint, shouldFix bool) error {
 			if strings.HasSuffix(arg, ".go") {
 				fset := token.NewFileSet()
 				f, err := parser.ParseFile(fset, arg, nil, parser.ParseComments)
+				if err != nil {
+					return err
+				}
 				err = checkNakedReturns(maxLength, shouldFix, fset, map[string]*ast.File{arg: f})
 				if err != nil {
 					return err
@@ -124,17 +125,19 @@ func checkNakedReturns(maxLength uint, shouldFix bool, fset *token.FileSet, file
 			file := fset.File(f.Package)
 			reportFile := file.Name()
 
-			fmt.Println(reportFile)
 			b := &bytes.Buffer{}
 			printer.Fprint(b, fset, f)
 
 			formatted, err := format.Source(b.Bytes())
 			if err != nil {
 				formatted = b.Bytes()
-				log.Printf("got error while formatting: %v\n", err)
+				log.Printf("format.Source error: %v\n", err)
 			}
 
-			ioutil.WriteFile(reportFile, formatted, os.ModeDevice)
+			err = ioutil.WriteFile(reportFile, formatted, 0644)
+			if err != nil {
+				log.Printf("ioutil.WriteFile error: %v\n", err)
+			}
 		}
 	}
 
@@ -216,21 +219,18 @@ func checkAllDirectories(path string, maxLength uint, shouldFix bool) {
 			return filepath.SkipDir
 		}
 
-		allFiles, err := parseAllGoFilesInDir(directory, fset)
-		if err != nil {
-			return nil
-		}
+		allFiles := parseAllGoFilesInDir(directory, fset)
 
 		err = checkNakedReturns(maxLength, shouldFix, fset, allFiles)
 		if err != nil {
-			log.Printf("got error: %+v\n", err)
+			log.Printf("checkNakedReturns error: %v\n", err)
 			return nil
 		}
 		return nil
 	})
 }
 
-func parseAllGoFilesInDir(dir string, fset *token.FileSet) (map[string]*ast.File, error) {
+func parseAllGoFilesInDir(dir string, fset *token.FileSet) map[string]*ast.File {
 	files := map[string]*ast.File{}
 
 	_ = filepath.Walk(dir, func(filename string, info os.FileInfo, err error) error {
@@ -253,11 +253,13 @@ func parseAllGoFilesInDir(dir string, fset *token.FileSet) (map[string]*ast.File
 
 		bytes, err := ioutil.ReadFile(filename)
 		if err != nil {
-			return err
+			log.Printf("ioutil.ReadFile error on %s: %v\n", filename, err)
+			return nil
 		}
 
 		f, err := parser.ParseFile(fset, filename, bytes, parser.ParseComments)
 		if err != nil {
+			log.Printf("parser.ParseFile error: %v\n", err)
 			return nil
 		}
 
@@ -265,5 +267,5 @@ func parseAllGoFilesInDir(dir string, fset *token.FileSet) (map[string]*ast.File
 		return nil
 	})
 
-	return files, nil
+	return files
 }
