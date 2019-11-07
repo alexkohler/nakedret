@@ -81,6 +81,26 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 }
 ```
 
+### testdata example
+
+In the provided `testdata/` directory, you can see how we might find (and fix!) naked returns.
+
+```console
+$ go run nakedret.go testdata/
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:54 longFunc naked returns on 34 line function
+$ go run nakedret.go -l 0
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:5 justone naked returns on 3 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:11 both naked returns on 4 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:18 three naked returns on 5 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:54 longFunc naked returns on 34 line function
+$ go run nakedret.go -fix -l 0
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:5 justone naked returns on 3 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:11 both naked returns on 4 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:18 three naked returns on 5 line function
+GOPATH/github.com/alexkohler/nakedret/testdata/example.go:54 longFunc naked returns on 34 line function
+$ git status # to see that the testdata/example.go file has been changed
+```
+
 ## TODO
 
 - Unit tests (may require some refactoring to do correctly)
