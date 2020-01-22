@@ -191,21 +191,20 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 	if len(namedReturns) > 0 && funcDecl.Body != nil {
 		// Scan the body for usage of the named returns
 		for _, stmt := range funcDecl.Body.List {
-
-			switch s := stmt.(type) {
-			case *ast.ReturnStmt:
-				if len(s.Results) == 0 {
-					file := v.f.File(s.Pos())
-					if file != nil && uint(functionLineLength) > v.maxLength {
-						if funcDecl.Name != nil {
-							log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, funcDecl.Name.Name, functionLineLength)
+			// Find return statements and report if invalid
+			ast.Inspect(stmt, func(n ast.Node) bool {
+				if ret, ok := n.(*ast.ReturnStmt); ok {
+					if len(ret.Results) == 0 {
+						file := v.f.File(ret.Pos())
+						if file != nil && uint(functionLineLength) > v.maxLength {
+							if funcDecl.Name != nil {
+								log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(ret.Pos()).Line, funcDecl.Name.Name, functionLineLength)
+							}
 						}
 					}
-					continue
 				}
-
-			default:
-			}
+				return true
+			})
 		}
 	}
 
