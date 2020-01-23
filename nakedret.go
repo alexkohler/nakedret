@@ -192,7 +192,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		// We've found a function
 		file := v.f.File(s.Pos())
 		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
-		funcName := "<unknown>"
+		funcName := fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
 		if s.Name != nil {
 			funcName = s.Name.Name
 		}
@@ -208,11 +208,12 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		// We've found a function literal
 		file := v.f.File(s.Pos())
 		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
+		funcName := fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
 		// Return a new visitor to track this function literal
 		return &returnsVisitor{
 			f:           v.f,
 			maxLength:   v.maxLength,
-			funcName:    "<literal>",
+			funcName:    funcName,
 			funcLength:  length,
 			reportNaked: uint(length) > v.maxLength && hasNamedReturns(s.Type),
 		}
