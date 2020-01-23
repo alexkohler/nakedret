@@ -34,6 +34,11 @@ func usage() {
 type returnsVisitor struct {
 	f         *token.FileSet
 	maxLength uint
+
+	// Details of the function we're currently dealing with
+	funcName    string
+	funcLength  int
+	reportNaked bool
 }
 
 func main() {
@@ -167,46 +172,56 @@ func exists(filename string) bool {
 	return err == nil
 }
 
-func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
-	var namedReturns []*ast.Ident
-
-	funcDecl, ok := node.(*ast.FuncDecl)
-	if !ok {
-		return v
+func hasNamedReturns(funcType *ast.FuncType) bool {
+	if funcType == nil || funcType.Results == nil {
+		return false
 	}
-	var functionLineLength int
-	// We've found a function
-	if funcDecl.Type != nil && funcDecl.Type.Results != nil {
-		for _, field := range funcDecl.Type.Results.List {
-			for _, ident := range field.Names {
-				if ident != nil {
-					namedReturns = append(namedReturns, ident)
-				}
+	for _, field := range funcType.Results.List {
+		for _, ident := range field.Names {
+			if ident != nil {
+				return true
 			}
 		}
-		file := v.f.File(funcDecl.Pos())
-		functionLineLength = file.Position(funcDecl.End()).Line - file.Position(funcDecl.Pos()).Line
 	}
+	return false
+}
 
-	if len(namedReturns) > 0 && funcDecl.Body != nil {
-		// Scan the body for usage of the named returns
-		for _, stmt := range funcDecl.Body.List {
-			// Find return statements and report if invalid
-			ast.Inspect(stmt, func(n ast.Node) bool {
-				if ret, ok := n.(*ast.ReturnStmt); ok {
-					if len(ret.Results) == 0 {
-						file := v.f.File(ret.Pos())
-						if file != nil && uint(functionLineLength) > v.maxLength {
-							if funcDecl.Name != nil {
-								log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(ret.Pos()).Line, funcDecl.Name.Name, functionLineLength)
-							}
-						}
-					}
-				}
-				return true
-			})
+func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+	switch s := node.(type) {
+	case *ast.FuncDecl:
+		// We've found a function
+		file := v.f.File(s.Pos())
+		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
+		funcName := "<unknown>"
+		if s.Name != nil {
+			funcName = s.Name.Name
+		}
+		// Return a new visitor to track this function
+		return &returnsVisitor{
+			f:           v.f,
+			maxLength:   v.maxLength,
+			funcName:    funcName,
+			funcLength:  length,
+			reportNaked: uint(length) > v.maxLength && hasNamedReturns(s.Type),
+		}
+	case *ast.FuncLit:
+		// We've found a function literal
+		file := v.f.File(s.Pos())
+		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
+		// Return a new visitor to track this function literal
+		return &returnsVisitor{
+			f:           v.f,
+			maxLength:   v.maxLength,
+			funcName:    "<literal>",
+			funcLength:  length,
+			reportNaked: uint(length) > v.maxLength && hasNamedReturns(s.Type),
+		}
+	case *ast.ReturnStmt:
+		// We've found a possibly naked return statement
+		if v.reportNaked && len(s.Results) == 0 {
+			file := v.f.File(s.Pos())
+			log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
 		}
 	}
-
 	return v
 }
