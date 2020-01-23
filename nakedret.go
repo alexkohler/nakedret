@@ -187,36 +187,20 @@ func hasNamedReturns(funcType *ast.FuncType) bool {
 }
 
 func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+	var (
+		funcType *ast.FuncType
+		funcName string
+	)
 	switch s := node.(type) {
 	case *ast.FuncDecl:
 		// We've found a function
-		file := v.f.File(s.Pos())
-		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
-		funcName := fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
-		if s.Name != nil {
-			funcName = s.Name.Name
-		}
-		// Return a new visitor to track this function
-		return &returnsVisitor{
-			f:           v.f,
-			maxLength:   v.maxLength,
-			funcName:    funcName,
-			funcLength:  length,
-			reportNaked: uint(length) > v.maxLength && hasNamedReturns(s.Type),
-		}
+		funcType = s.Type
+		funcName = s.Name.Name
 	case *ast.FuncLit:
 		// We've found a function literal
+		funcType = s.Type
 		file := v.f.File(s.Pos())
-		length := file.Position(s.End()).Line - file.Position(s.Pos()).Line
-		funcName := fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
-		// Return a new visitor to track this function literal
-		return &returnsVisitor{
-			f:           v.f,
-			maxLength:   v.maxLength,
-			funcName:    funcName,
-			funcLength:  length,
-			reportNaked: uint(length) > v.maxLength && hasNamedReturns(s.Type),
-		}
+		funcName = fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
 	case *ast.ReturnStmt:
 		// We've found a possibly naked return statement
 		if v.reportNaked && len(s.Results) == 0 {
@@ -224,5 +208,19 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 			log.Printf("%v:%v %v naked returns on %v line function \n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
 		}
 	}
+
+	if funcType != nil {
+		// Create a new visitor to track returns for this function
+		file := v.f.File(node.Pos())
+		length := file.Position(node.End()).Line - file.Position(node.Pos()).Line
+		return &returnsVisitor{
+			f:           v.f,
+			maxLength:   v.maxLength,
+			funcName:    funcName,
+			funcLength:  length,
+			reportNaked: uint(length) > v.maxLength && hasNamedReturns(funcType),
+		}
+	}
+
 	return v
 }
