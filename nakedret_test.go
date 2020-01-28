@@ -28,7 +28,7 @@ func runNakedret(t *testing.T, filename string, maxLength uint, expected string)
 }
 
 func TestReturnInBlock(t *testing.T) {
-	expected := `testdata/ret-in-block.go:9 Dummy naked returns on 8 line function
+	expected := `testdata/ret-in-block.go:9: Dummy naked returns on 8 line function
 `
 	runNakedret(t, "testdata/ret-in-block.go", 0, expected)
 }
@@ -38,8 +38,8 @@ func TestIgnoreShortFunctions(t *testing.T) {
 }
 
 func TestNestedFunctionLiterals(t *testing.T) {
-	expected := `testdata/nested.go:16 Bad naked returns on 6 line function
-testdata/nested.go:21 <func():20> naked returns on 2 line function
+	expected := `testdata/nested.go:16: Bad naked returns on 6 line function
+testdata/nested.go:21: <func():20> naked returns on 2 line function
 `
 	runNakedret(t, "testdata/nested.go", 0, expected)
 }
