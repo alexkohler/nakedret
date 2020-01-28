@@ -205,7 +205,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		// We've found a possibly naked return statement
 		if v.reportNaked && len(s.Results) == 0 {
 			file := v.f.File(s.Pos())
-			log.Printf("%v:%v %v naked returns on %v line function\n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
+			log.Printf("%v:%v: %v naked returns on %v line function\n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
 		}
 	}
 
