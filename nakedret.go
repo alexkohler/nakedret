@@ -34,6 +34,8 @@ func usage() {
 type returnsVisitor struct {
 	f         *token.FileSet
 	maxLength uint
+	root      *returnsVisitor
+	found     bool
 
 	// Details of the function we're currently dealing with
 	funcName    string
@@ -47,15 +49,16 @@ func main() {
 	log.SetFlags(0)
 
 	maxLength := flag.Uint("l", 5, "maximum number of lines for a naked return function")
+	setExitStatus := flag.Bool("set_exit_status", false, "Set exit status to 1 if any issues are found")
 	flag.Usage = usage
 	flag.Parse()
 
-	if err := checkNakedReturns(flag.Args(), maxLength); err != nil {
-		log.Println(err)
+	if err := checkNakedReturns(flag.Args(), maxLength, *setExitStatus); err != nil {
+		log.Fatal(err)
 	}
 }
 
-func checkNakedReturns(args []string, maxLength *uint) error {
+func checkNakedReturns(args []string, maxLength *uint, setExitStatus bool) error {
 
 	fset := token.NewFileSet()
 
@@ -72,9 +75,13 @@ func checkNakedReturns(args []string, maxLength *uint) error {
 		f:         fset,
 		maxLength: *maxLength,
 	}
+	retVis.root = retVis
 
 	for _, f := range files {
 		ast.Walk(retVis, f)
+	}
+	if retVis.found && setExitStatus {
+		os.Exit(1)
 	}
 
 	return nil
@@ -206,6 +213,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		if v.reportNaked && len(s.Results) == 0 {
 			file := v.f.File(s.Pos())
 			log.Printf("%v:%v: %v naked returns on %v line function\n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
+			v.root.found = true
 		}
 	}
 
@@ -215,6 +223,7 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		length := file.Position(node.End()).Line - file.Position(node.Pos()).Line
 		return &returnsVisitor{
 			f:           v.f,
+			root:        v.root,
 			maxLength:   v.maxLength,
 			funcName:    funcName,
 			funcLength:  length,
