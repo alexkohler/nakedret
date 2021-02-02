@@ -18,7 +18,7 @@ func runNakedret(t *testing.T, filename string, maxLength uint, expected string)
 	log.SetOutput(&logBuf)
 	log.SetFlags(0)
 
-	if err := checkNakedReturns([]string{filename}, &maxLength); err != nil {
+	if err := checkNakedReturns([]string{filename}, &maxLength, false); err != nil {
 		t.Fatal(err)
 	}
 	actual := string(logBuf.Bytes())
