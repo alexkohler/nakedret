@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -54,10 +53,8 @@ func runNakedret(t *testing.T, filename string, maxLength uint, expected string)
 		t.Fatal(err)
 	}
 	actual := logBuf.String()
-	fmt.Print(actual)
 	if expected != actual {
-		// t.Errorf("Unexpected output:\n-----\ngot: \n%s\nexpected: \n%v\n-----\n", actual, expected)
-		t.Errorf("Unexpected output:\n-----\n%s\n-----", actual)
+		t.Errorf("Unexpected output:\n-----\ngot: \n%s\nexpected: \n%v\n-----\n", actual, expected)
 	}
 }
 
