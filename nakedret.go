@@ -64,7 +64,7 @@ func checkNakedReturns(args []string, maxLength *uint, setExitStatus bool) error
 
 	files, err := parseInput(args, fset)
 	if err != nil {
-		return fmt.Errorf("could not parse input %v", err)
+		return fmt.Errorf("could not parse input: %v", err)
 	}
 
 	if maxLength == nil {

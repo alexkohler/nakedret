@@ -22,3 +22,21 @@ func BadNested() {
 	}
 	return
 }
+
+func MoreBad() {
+	var _ = func() (err error) {
+		return
+	}
+
+	func() (err error) {
+		return
+	}()
+
+	defer func() (err error) {
+		return
+	}()
+
+	go func() (err error) {
+		return
+	}()
+}
