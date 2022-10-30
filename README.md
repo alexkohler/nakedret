@@ -3,12 +3,28 @@
 nakedret is a Go static analysis tool to find naked returns in functions greater than a specified function length.
 
 ## Installation
+Install Nakedret via go install:
 
-    go get -u github.com/alexkohler/nakedret
+```cmd
+go install github.com/alexkohler/nakedret@latest
+```
+
+If you have not already added your `GOPATH/bin` directory to your `PATH` environment variable then you will need to do so.
+
+Windows (cmd):
+```cmd
+set PATH=%PATH%;C:\your\GOPATH\bin
+```
+
+Bash (you can verify a path has been set):
+```Bash
+where nakedret
+export PATH=$PATH:/your/GOPATH/bin #to set path if it does not exist
+```
 
 ## Usage
 
-Similar to other Go static anaylsis tools (such as golint, go vet) , nakedret can be invoked with one or more filenames, directories, or packages named by its import path. Nakedret also supports the `...` wildcard. 
+Similar to other Go static anaylsis tools (such as `golint`, `go vet`), nakedret can be invoked with one or more filenames, directories, or packages named by its import path. Nakedret also supports the `...` wildcard. 
 
     nakedret [flags] files/directories/packages
 
