@@ -18,7 +18,8 @@ set PATH=%PATH%;C:\your\GOPATH\bin
 
 Bash (you can verify a path has been set):
 ```Bash
-where nakedret
+# Check if nakedret is on PATH
+which nakedret
 export PATH=$PATH:/your/GOPATH/bin #to set path if it does not exist
 ```
 
