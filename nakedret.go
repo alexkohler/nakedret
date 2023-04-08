@@ -12,10 +12,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/inspect"
+	"golang.org/x/tools/go/analysis/singlechecker"
+	"golang.org/x/tools/go/ast/inspector"
 )
 
 const (
 	pwd = "./"
+
+	DefaultLines = 5
 )
 
 func init() {
@@ -23,39 +30,60 @@ func init() {
 	build.Default.UseAllFiles = true
 }
 
-func usage() {
-	log.Printf("Usage of %s:\n", os.Args[0])
-	log.Printf("\nnakedret [flags] # runs on package in current directory\n")
-	log.Printf("\nnakedret [flags] [packages]\n")
-	log.Printf("Flags:\n")
-	flag.PrintDefaults()
+func main() {
+	analyzer := NakedReturnAnalyzer(DefaultLines)
+	singlechecker.Main(analyzer)
+}
+
+func NakedReturnAnalyzer(defaultLines uint) *analysis.Analyzer {
+	nakedRet := &NakedReturnRunner{}
+	flags := flag.NewFlagSet("nakedret", flag.ExitOnError)
+	flags.UintVar(&nakedRet.MaxLength, "l", defaultLines, "maximum number of lines for a naked return function")
+	var analyzer = &analysis.Analyzer{
+		Name:     "nakedret",
+		Doc:      "Checks that functions with naked returns are not longer than a maximum size (can be zero).",
+		Run:      nakedRet.run,
+		Flags:    *flags,
+		Requires: []*analysis.Analyzer{inspect.Analyzer},
+	}
+	return analyzer
+}
+
+type NakedReturnRunner struct {
+	MaxLength uint
+}
+
+func (n *NakedReturnRunner) run(pass *analysis.Pass) (interface{}, error) {
+	inspector := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+
+	nodeFilter := []ast.Node{ // filter needed nodes: visit only them
+		(*ast.FuncDecl)(nil),
+		(*ast.FuncLit)(nil),
+		(*ast.ReturnStmt)(nil),
+	}
+	retVis := &returnsVisitor{
+		pass:      pass,
+		f:         pass.Fset,
+		maxLength: n.MaxLength,
+	}
+	inspector.Nodes(nodeFilter, retVis.NodesVisit)
+	return nil, nil
 }
 
 type returnsVisitor struct {
+	pass      *analysis.Pass
 	f         *token.FileSet
 	maxLength uint
-	root      *returnsVisitor
-	found     bool
 
+	stack []funcInfo
+}
+
+type funcInfo struct {
 	// Details of the function we're currently dealing with
+	funcType    *ast.FuncType
 	funcName    string
 	funcLength  int
 	reportNaked bool
-}
-
-func main() {
-
-	// Remove log timestamp
-	log.SetFlags(0)
-
-	maxLength := flag.Uint("l", 5, "maximum number of lines for a naked return function")
-	setExitStatus := flag.Bool("set_exit_status", false, "Set exit status to 1 if any issues are found")
-	flag.Usage = usage
-	flag.Parse()
-
-	if err := checkNakedReturns(flag.Args(), maxLength, *setExitStatus); err != nil {
-		log.Fatal(err)
-	}
 }
 
 func checkNakedReturns(args []string, maxLength *uint, setExitStatus bool) error {
@@ -71,17 +99,25 @@ func checkNakedReturns(args []string, maxLength *uint, setExitStatus bool) error
 		return errors.New("max length nil")
 	}
 
-	retVis := &returnsVisitor{
-		f:         fset,
-		maxLength: *maxLength,
+	analyzer := NakedReturnAnalyzer(*maxLength)
+	pass := &analysis.Pass{
+		Analyzer: analyzer,
+		Fset:     fset,
+		Files:    files,
+		Report: func(d analysis.Diagnostic) {
+			log.Printf("%s:%d: %s", fset.Position(d.Pos).Filename, fset.Position(d.Pos).Line, d.Message)
+		},
+		ResultOf: map[*analysis.Analyzer]interface{}{},
 	}
-	retVis.root = retVis
+	result, err := inspect.Analyzer.Run(pass)
+	if err != nil {
+		return err
+	}
+	pass.ResultOf[inspect.Analyzer] = result
 
-	for _, f := range files {
-		ast.Walk(retVis, f)
-	}
-	if retVis.found && setExitStatus {
-		os.Exit(1)
+	_, err = analyzer.Run(pass)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -193,7 +229,18 @@ func hasNamedReturns(funcType *ast.FuncType) bool {
 	return false
 }
 
-func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
+func nestedFuncName(stack []funcInfo) string {
+	var r string
+	for i, f := range stack {
+		if i > 0 {
+			r += "."
+		}
+		r += f.funcName
+	}
+	return r
+}
+
+func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 	var (
 		funcType *ast.FuncType
 		funcName string
@@ -210,26 +257,34 @@ func (v *returnsVisitor) Visit(node ast.Node) ast.Visitor {
 		funcName = fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
 	case *ast.ReturnStmt:
 		// We've found a possibly naked return statement
-		if v.reportNaked && len(s.Results) == 0 {
-			file := v.f.File(s.Pos())
-			log.Printf("%v:%v: %v naked returns on %v line function\n", file.Name(), file.Position(s.Pos()).Line, v.funcName, v.funcLength)
-			v.root.found = true
+		fun := v.stack[len(v.stack)-1]
+		funName := nestedFuncName(v.stack)
+		if fun.reportNaked && len(s.Results) == 0 && push {
+			//v.pass.Reportf(s.Pos(), "%v naked returns on %v line function", funName, fun.funcLength)
+			v.pass.Reportf(s.Pos(), "naked return in func `%s` with %d lines of code", funName, fun.funcLength)
 		}
 	}
 
-	if funcType != nil {
-		// Create a new visitor to track returns for this function
+	if !push {
+		if funcType == nil {
+			return false
+		}
+		// Pop function info
+		v.stack = v.stack[:len(v.stack)-1]
+		return false
+	}
+
+	if push && funcType != nil {
+		// Push function info to track returns for this function
 		file := v.f.File(node.Pos())
 		length := file.Position(node.End()).Line - file.Position(node.Pos()).Line
-		return &returnsVisitor{
-			f:           v.f,
-			root:        v.root,
-			maxLength:   v.maxLength,
+		v.stack = append(v.stack, funcInfo{
+			funcType:    funcType,
 			funcName:    funcName,
 			funcLength:  length,
 			reportNaked: uint(length) > v.maxLength && hasNamedReturns(funcType),
-		}
+		})
 	}
 
-	return v
+	return true
 }
