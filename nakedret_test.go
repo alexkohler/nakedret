@@ -93,3 +93,14 @@ func TestAll(t *testing.T) {
 	log.Printf("Running tests on %s", testdata)
 	analysistest.Run(t, testdata, NakedReturnAnalyzer(0), "x")
 }
+
+func TestAllFixes(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get wd: %s", err)
+	}
+
+	testdata := filepath.Join(wd, "testdata")
+	log.Printf("Running tests on %s", testdata)
+	analysistest.RunWithSuggestedFixes(t, testdata, NakedReturnAnalyzer(0), "x")
+}

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"log"
 	"os"
@@ -240,6 +242,20 @@ func nestedFuncName(stack []funcInfo) string {
 	return r
 }
 
+func nakedReturnFix(s *ast.ReturnStmt, funcType *ast.FuncType) *ast.ReturnStmt {
+	var nameExprs []ast.Expr
+	for _, result := range funcType.Results.List {
+		for _, ident := range result.Names {
+			if ident != nil {
+				nameExprs = append(nameExprs, ident)
+			}
+		}
+	}
+	var sFix = *s
+	sFix.Results = nameExprs
+	return &sFix
+}
+
 func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 	var (
 		funcType *ast.FuncType
@@ -260,8 +276,26 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 		fun := v.stack[len(v.stack)-1]
 		funName := nestedFuncName(v.stack)
 		if fun.reportNaked && len(s.Results) == 0 && push {
+			sFix := nakedReturnFix(s, fun.funcType)
+			b := &bytes.Buffer{}
+			err := printer.Fprint(b, v.f, sFix)
+			if err != nil {
+				log.Printf("failed to format named return fix: %s", err)
+			}
 			//v.pass.Reportf(s.Pos(), "%v naked returns on %v line function", funName, fun.funcLength)
-			v.pass.Reportf(s.Pos(), "naked return in func `%s` with %d lines of code", funName, fun.funcLength)
+			//v.pass.Reportf(s.Pos(), "naked return in func `%s` with %d lines of code", funName, fun.funcLength)
+			v.pass.Report(analysis.Diagnostic{
+				Pos:     s.Pos(),
+				End:     s.End(),
+				Message: fmt.Sprintf("naked return in func `%s` with %d lines of code", funName, fun.funcLength),
+				SuggestedFixes: []analysis.SuggestedFix{{
+					Message: "explicit return statement",
+					TextEdits: []analysis.TextEdit{{
+						Pos:     s.Pos(),
+						End:     s.End(),
+						NewText: b.Bytes()}},
+				}},
+			})
 		}
 	}
 
