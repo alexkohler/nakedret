@@ -2,7 +2,7 @@
 .vscode
 
 # binary
-nakedret
+/nakedret
 
 # usage video for docs
 .github/images

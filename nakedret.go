@@ -1,4 +1,4 @@
-package main
+package nakedret
 
 import (
 	"bytes"
@@ -17,24 +17,16 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
-	"golang.org/x/tools/go/analysis/singlechecker"
 	"golang.org/x/tools/go/ast/inspector"
 )
 
 const (
 	pwd = "./"
-
-	DefaultLines = 5
 )
 
 func init() {
 	//TODO allow build tags
 	build.Default.UseAllFiles = true
-}
-
-func main() {
-	analyzer := NakedReturnAnalyzer(DefaultLines)
-	singlechecker.Main(analyzer)
 }
 
 func NakedReturnAnalyzer(defaultLines uint) *analysis.Analyzer {
