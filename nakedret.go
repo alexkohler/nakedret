@@ -272,8 +272,6 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 			if err != nil {
 				log.Printf("failed to format named return fix: %s", err)
 			}
-			//v.pass.Reportf(s.Pos(), "%v naked returns on %v line function", funName, fun.funcLength)
-			//v.pass.Reportf(s.Pos(), "naked return in func `%s` with %d lines of code", funName, fun.funcLength)
 			v.pass.Report(analysis.Diagnostic{
 				Pos:     s.Pos(),
 				End:     s.End(),
