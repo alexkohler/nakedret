@@ -47,7 +47,7 @@ type NakedReturnRunner struct {
 	MaxLength uint
 }
 
-func (n *NakedReturnRunner) run(pass *analysis.Pass) (interface{}, error) {
+func (n *NakedReturnRunner) run(pass *analysis.Pass) (any, error) {
 	inspector := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{ // filter needed nodes: visit only them
@@ -69,7 +69,8 @@ type returnsVisitor struct {
 	f         *token.FileSet
 	maxLength uint
 
-	stack []funcInfo
+	// functions contains funcInfo for each nested function definition encountered while visiting the AST.
+	functions []funcInfo
 }
 
 type funcInfo struct {
@@ -101,7 +102,7 @@ func checkNakedReturns(args []string, maxLength *uint, setExitStatus bool) error
 		Report: func(d analysis.Diagnostic) {
 			log.Printf("%s:%d: %s", fset.Position(d.Pos).Filename, fset.Position(d.Pos).Line, d.Message)
 		},
-		ResultOf: map[*analysis.Analyzer]interface{}{},
+		ResultOf: map[*analysis.Analyzer]any{},
 	}
 	result, err := inspect.Analyzer.Run(pass)
 	if err != nil {
@@ -223,15 +224,12 @@ func hasNamedReturns(funcType *ast.FuncType) bool {
 	return false
 }
 
-func nestedFuncName(stack []funcInfo) string {
-	var r string
-	for i, f := range stack {
-		if i > 0 {
-			r += "."
-		}
-		r += f.funcName
+func nestedFuncName(functions []funcInfo) string {
+	var names []string
+	for _, f := range functions {
+		names = append(names, f.funcName)
 	}
-	return r
+	return strings.Join(names, ".")
 }
 
 func nakedReturnFix(s *ast.ReturnStmt, funcType *ast.FuncType) *ast.ReturnStmt {
@@ -265,8 +263,8 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 		funcName = fmt.Sprintf("<func():%v>", file.Position(s.Pos()).Line)
 	case *ast.ReturnStmt:
 		// We've found a possibly naked return statement
-		fun := v.stack[len(v.stack)-1]
-		funName := nestedFuncName(v.stack)
+		fun := v.functions[len(v.functions)-1]
+		funName := nestedFuncName(v.functions)
 		if fun.reportNaked && len(s.Results) == 0 && push {
 			sFix := nakedReturnFix(s, fun.funcType)
 			b := &bytes.Buffer{}
@@ -296,7 +294,7 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 			return false
 		}
 		// Pop function info
-		v.stack = v.stack[:len(v.stack)-1]
+		v.functions = v.functions[:len(v.functions)-1]
 		return false
 	}
 
@@ -304,7 +302,7 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 		// Push function info to track returns for this function
 		file := v.f.File(node.Pos())
 		length := file.Position(node.End()).Line - file.Position(node.Pos()).Line
-		v.stack = append(v.stack, funcInfo{
+		v.functions = append(v.functions, funcInfo{
 			funcType:    funcType,
 			funcName:    funcName,
 			funcLength:  length,
