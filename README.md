@@ -6,7 +6,7 @@ nakedret is a Go static analysis tool to find naked returns in functions greater
 Install Nakedret via go install:
 
 ```cmd
-go install github.com/alexkohler/nakedret@latest
+go install github.com/alexkohler/nakedret/cmd/nakedret@latest
 ```
 
 If you have not already added your `GOPATH/bin` directory to your `PATH` environment variable then you will need to do so.
@@ -30,6 +30,12 @@ Similar to other Go static anaylsis tools (such as `golint`, `go vet`), nakedret
     nakedret [flags] files/directories/packages
 
 Currently, the only flag supported is -l, which is an optional numeric flag to specify the maximum length a function can be (in terms of line length). If not specified, it defaults to 5.
+
+It can also be run using `go vet`:
+
+```shell
+go vet -vettool=$(which nakedret) ./...
+```
 
 ## Purpose
 
