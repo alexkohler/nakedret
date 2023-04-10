@@ -88,3 +88,12 @@ func DeeplyNested(b int) (f func() (x, y int)) {
 	}
 	return f // want "naked return in func `DeeplyNested` with 20 lines of code"
 }
+
+var ToplevelFuncLit = func(x int) (err error) {
+	if x > 0 {
+		return func() (err error) {
+			return err // want "naked return in func `<func..:92>.<func..:94>` with 2 lines of code"
+		}()
+	}
+	return err // want "naked return in func `<func..:92>` with 7 lines of code"
+}
