@@ -31,6 +31,12 @@ Similar to other Go static anaylsis tools (such as `golint`, `go vet`), nakedret
 
 Currently, the only flag supported is -l, which is an optional numeric flag to specify the maximum length a function can be (in terms of line length). If not specified, it defaults to 5.
 
+It can also be run using `go vet`:
+
+```shell
+go vet -vettool=$(which nakedret) ./...
+```
+
 ## Purpose
 
 As noted in Go's [Code Review comments](https://github.com/golang/go/wiki/CodeReviewComments#named-result-parameters):
