@@ -50,6 +50,9 @@ var testcases = []struct {
 		"testdata/src/x/nested.go:89: naked return in func `DeeplyNested` with 20 lines of code",
 		"testdata/src/x/nested.go:95: naked return in func `<func():92>.<func():94>` with 2 lines of code",
 		"testdata/src/x/nested.go:98: naked return in func `<func():92>` with 7 lines of code",
+		"testdata/src/x/nested.go:101: naked return in func `SingleLine` with 1 lines of code",
+		"testdata/src/x/nested.go:103: naked return in func `<func():103>` with 1 lines of code",
+		"testdata/src/x/nested.go:106: naked return in func `SingleLineNested.<func():106>` with 1 lines of code",
 		""}, "\n"),
 		testParams{
 			filename:  "testdata/src/x/nested.go",

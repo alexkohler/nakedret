@@ -302,6 +302,10 @@ func (v *returnsVisitor) NodesVisit(node ast.Node, push bool) bool {
 		// Push function info to track returns for this function
 		file := v.f.File(node.Pos())
 		length := file.Position(node.End()).Line - file.Position(node.Pos()).Line
+		if length == 0 {
+			// consider functions that finish on the same line as they start as single line functions, not zero lines!
+			length = 1
+		}
 		v.functions = append(v.functions, funcInfo{
 			funcType:    funcType,
 			funcName:    funcName,

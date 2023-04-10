@@ -97,3 +97,11 @@ var ToplevelFuncLit = func(x int) (err error) {
 	}
 	return err // want "naked return in func `<func..:92>` with 7 lines of code"
 }
+
+func SingleLine() (err error) { return err } // want "naked return in func `SingleLine` with 1 lines of code"
+
+var SingleLit = func() (err error) { return err } // want "naked return in func `<func..:103>` with 1 lines of code"
+
+func SingleLineNested() (err error) {
+	return func() (err error) { return err }() // want "naked return in func `SingleLineNested.<func..:106>` with 1 lines of code"
+}
