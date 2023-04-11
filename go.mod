@@ -1,4 +1,4 @@
-module github.com/alexkohler/nakedret
+module github.com/alexkohler/nakedret/v2
 
 go 1.18
 

@@ -3,7 +3,7 @@ package main
 import (
 	"golang.org/x/tools/go/analysis/singlechecker"
 
-	"github.com/alexkohler/nakedret"
+	"github.com/alexkohler/nakedret/v2"
 )
 
 const (
