@@ -1,6 +1,6 @@
 module github.com/alexkohler/nakedret/v2
 
-go 1.22
+go 1.21
 
 require golang.org/x/tools v0.19.0
 
