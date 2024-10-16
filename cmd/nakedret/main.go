@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	DefaultLines = 5
+	DefaultLines         = 5
+	DefaultSkipTestFiles = false
 )
 
 func init() {
@@ -18,6 +19,6 @@ func init() {
 }
 
 func main() {
-	analyzer := nakedret.NakedReturnAnalyzer(DefaultLines)
+	analyzer := nakedret.NakedReturnAnalyzer(DefaultLines, DefaultSkipTestFiles)
 	singlechecker.Main(analyzer)
 }
