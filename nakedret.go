@@ -26,7 +26,7 @@ func NakedReturnAnalyzer(defaultLines uint, skipTestFiles bool) *analysis.Analyz
 	nakedRet := &NakedReturnRunner{}
 	flags := flag.NewFlagSet("nakedret", flag.ExitOnError)
 	flags.UintVar(&nakedRet.MaxLength, "l", defaultLines, "maximum number of lines for a naked return function")
-	flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", skipTestFiles, "skipping test files")
+	flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", skipTestFiles, "set to true to skip test files")
 	var analyzer = &analysis.Analyzer{
 		Name:     "nakedret",
 		Doc:      "Checks that functions with naked returns are not longer than a maximum size (can be zero).",
