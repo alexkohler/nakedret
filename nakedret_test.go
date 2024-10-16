@@ -12,8 +12,9 @@ import (
 )
 
 type testParams struct {
-	filename  string
-	maxLength uint
+	filename      string
+	maxLength     uint
+	skipTestFiles bool
 }
 
 var testcases = []struct {
@@ -58,9 +59,22 @@ var testcases = []struct {
 			filename:  "testdata/src/x/nested.go",
 			maxLength: 0,
 		}},
+	{"failing on test files",
+		"testdata/src/x/example_test.go:11: naked return in func `SomeTestHelperFunction` with 3 lines of code\n",
+		testParams{
+			filename:  "testdata/src/x/example_test.go",
+			maxLength: 0,
+		}},
+	{"skipping test files",
+		"",
+		testParams{
+			filename:      "testdata/src/x/example_test.go",
+			maxLength:     0,
+			skipTestFiles: true,
+		}},
 }
 
-func runNakedret(t *testing.T, filename string, maxLength uint, expected string) {
+func runNakedret(t *testing.T, filename string, maxLength uint, skipTestFiles bool, expected string) {
 	t.Helper()
 	defer func() {
 		// Reset logging
@@ -71,7 +85,7 @@ func runNakedret(t *testing.T, filename string, maxLength uint, expected string)
 	log.SetOutput(&logBuf)
 	log.SetFlags(0)
 
-	if err := checkNakedReturns([]string{filename}, &maxLength, false); err != nil {
+	if err := checkNakedReturns([]string{filename}, &maxLength, skipTestFiles, false); err != nil {
 		t.Fatal(err)
 	}
 	actual := logBuf.String()
@@ -83,7 +97,7 @@ func runNakedret(t *testing.T, filename string, maxLength uint, expected string)
 func TestCheckNakedReturns(t *testing.T) {
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			runNakedret(t, tt.params.filename, tt.params.maxLength, tt.expected)
+			runNakedret(t, tt.params.filename, tt.params.maxLength, tt.params.skipTestFiles, tt.expected)
 		})
 	}
 }
@@ -95,7 +109,7 @@ func TestAll(t *testing.T) {
 	}
 
 	testdata := filepath.Join(wd, "testdata")
-	analysistest.Run(t, testdata, NakedReturnAnalyzer(0), "x")
+	analysistest.Run(t, testdata, NakedReturnAnalyzer(0, true), "x")
 }
 
 func TestAllFixes(t *testing.T) {
@@ -105,5 +119,5 @@ func TestAllFixes(t *testing.T) {
 	}
 
 	testdata := filepath.Join(wd, "testdata")
-	analysistest.RunWithSuggestedFixes(t, testdata, NakedReturnAnalyzer(0), "x")
+	analysistest.RunWithSuggestedFixes(t, testdata, NakedReturnAnalyzer(0, true), "x")
 }
