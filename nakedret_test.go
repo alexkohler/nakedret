@@ -109,7 +109,7 @@ func TestAll(t *testing.T) {
 	}
 
 	testdata := filepath.Join(wd, "testdata")
-	analysistest.Run(t, testdata, NakedReturnAnalyzer(0, true), "x")
+	analysistest.Run(t, testdata, NakedReturnAnalyzer(&NakedReturnRunner{SkipTestFiles: true}), "x")
 }
 
 func TestAllFixes(t *testing.T) {
@@ -119,5 +119,5 @@ func TestAllFixes(t *testing.T) {
 	}
 
 	testdata := filepath.Join(wd, "testdata")
-	analysistest.RunWithSuggestedFixes(t, testdata, NakedReturnAnalyzer(0, true), "x")
+	analysistest.RunWithSuggestedFixes(t, testdata, NakedReturnAnalyzer(&NakedReturnRunner{0, true}), "x")
 }
