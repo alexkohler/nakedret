@@ -19,6 +19,12 @@ func init() {
 }
 
 func main() {
-	analyzer := nakedret.NakedReturnAnalyzer(DefaultLines, DefaultSkipTestFiles)
+	nakedRet := &nakedret.NakedReturnRunner{}
+
+	analyzer := nakedret.NakedReturnAnalyzer(nakedRet)
+
+	analyzer.Flags.UintVar(&nakedRet.MaxLength, "l", DefaultLines, "maximum number of lines for a naked return function")
+	analyzer.Flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", DefaultSkipTestFiles, "set to true to skip test files")
+
 	singlechecker.Main(analyzer)
 }

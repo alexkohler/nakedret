@@ -21,18 +21,13 @@ import (
 
 const pwd = "./"
 
-func NakedReturnAnalyzer(defaultLines uint, skipTestFiles bool) *analysis.Analyzer {
-	nakedRet := &NakedReturnRunner{}
-
+func NakedReturnAnalyzer(nakedRet *NakedReturnRunner) *analysis.Analyzer {
 	a := &analysis.Analyzer{
 		Name:     "nakedret",
 		Doc:      "Checks that functions with naked returns are not longer than a maximum size (can be zero).",
 		Run:      nakedRet.run,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 	}
-
-	a.Flags.UintVar(&nakedRet.MaxLength, "l", defaultLines, "maximum number of lines for a naked return function")
-	a.Flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", skipTestFiles, "set to true to skip test files")
 
 	return a
 }
@@ -91,7 +86,7 @@ func checkNakedReturns(args []string, maxLength *uint, skipTestFiles bool, setEx
 		return errors.New("max length nil")
 	}
 
-	analyzer := NakedReturnAnalyzer(*maxLength, skipTestFiles)
+	analyzer := NakedReturnAnalyzer(&NakedReturnRunner{MaxLength: *maxLength, SkipTestFiles: skipTestFiles})
 	pass := &analysis.Pass{
 		Analyzer: analyzer,
 		Fset:     fset,
