@@ -3,7 +3,6 @@ package nakedret
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -24,17 +23,18 @@ const pwd = "./"
 
 func NakedReturnAnalyzer(defaultLines uint, skipTestFiles bool) *analysis.Analyzer {
 	nakedRet := &NakedReturnRunner{}
-	flags := flag.NewFlagSet("nakedret", flag.ExitOnError)
-	flags.UintVar(&nakedRet.MaxLength, "l", defaultLines, "maximum number of lines for a naked return function")
-	flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", skipTestFiles, "set to true to skip test files")
-	var analyzer = &analysis.Analyzer{
+
+	a := &analysis.Analyzer{
 		Name:     "nakedret",
 		Doc:      "Checks that functions with naked returns are not longer than a maximum size (can be zero).",
 		Run:      nakedRet.run,
-		Flags:    *flags,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 	}
-	return analyzer
+
+	a.Flags.UintVar(&nakedRet.MaxLength, "l", defaultLines, "maximum number of lines for a naked return function")
+	a.Flags.BoolVar(&nakedRet.SkipTestFiles, "skip-test-files", skipTestFiles, "set to true to skip test files")
+
+	return a
 }
 
 type NakedReturnRunner struct {
